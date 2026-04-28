@@ -9,7 +9,7 @@ Eurorack CV sequencer with radically flexible hardware
 <li>the outside potentiometers have a microswitch under them for clickyclicky</li>
 <li>middle of the module -- a circle of 8 potentiometers that will control CVs</li>
 <li>in the center of the circle there's a keyboard keyswitch for "shift" duties?</li>
-<li>on the bottom there's 8 output jacks.Th</li>
+<li>on the bottom there's 8 output jacks.The top left output is connected to a real DAC. The other three on that row are filtered-PWM-analog outputs for envelopes and whatever. The 2nd row is intended for triggers or gates out, but the pins are PWM-capable, and a simple 1-pole filter can be added to these by installing a capacitor</li>
 <li>every pot is a clear-shafted JuanitoPot, with an addressable APA102 LED under it</li>
 <li>every jack has an LED under it, just a single color, doesn't flash or anything</li>
 <li>each output jack has an LED near it that shines with whatever intensity the jack is outputting</li>
