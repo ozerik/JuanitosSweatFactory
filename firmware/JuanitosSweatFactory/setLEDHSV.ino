@@ -3,9 +3,8 @@ void setLEDHSV(byte index, byte h, byte s, byte v) {
   byte r;
   byte g;
   byte b;
-  if (s == 0) {
-    r = g = b = v;
-  } else {
+  if (s == 0) r = g = b = v;
+  else {
     byte region = h / 43;
     byte remainder = (h - (region * 43)) * 6;
     byte p = ((unsigned int)v * (255 - s)) >> 8;
