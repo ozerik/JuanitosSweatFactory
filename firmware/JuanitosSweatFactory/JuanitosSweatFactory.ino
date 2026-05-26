@@ -8,10 +8,23 @@ APA102<dataPin, clockPin> ledStrip;  // the "object" of the LED array
 const byte ledCount = 12;            // how many LEDs are in this project?
 rgb_color colors[ledCount];          // here's where the color info is stored
 const byte brightness = 10;          // default brightness is 10, out of 31
+const byte jitterDefeater = 70;      // hysteresis conqueror -- how much the pot has to turn into the new value to count?
+
+
+byte mode;     // specifically mode of sequence, from "linear" to cylon to patterns
+int metaMode;  // modifies the mode of the sequences
+
+const int shortGlide = 300;
+const int longGlide = 1100;
+
+
+
+
+
 
 /* this part handles the values coming in from the pots and jacks, along with
 the low-resolution versions for LED colors*/
-unsigned int circlePots[8];   // the array for the high-res value of the 8 pots in a circle
+int circlePots[8];            // the array for the high-res value of the 8 pots in a circle
 byte cirLEDs[8];              // the low-res version for the LEDs
 unsigned int topRowPots[4];   // top four pots, high resolution value
 byte topLEDs[4];              // low-res, for the LED colors
@@ -34,7 +47,7 @@ bool clockBrightToggle = true;
 byte CFC;
 byte clockDivider;
 byte oldClockDivider;
-const byte hysteresisWindow = 50;
+const byte hysteresisWindow = 200;
 int oldClockPotValue;
 
 
@@ -56,19 +69,18 @@ byte playEnvTracker;               // keep track of what part of the ADSR is pla
 byte LEDEnvTracker;                // only plays through the LED under the envelope pot
 byte LEDenvelopeValue;             // the LED section gets its own variable
 byte envelopeValue;                // okay global value I guess
+bool loopStart = false;            // tracker for the start of the loop. Just for trigger output
 unsigned long envelopeTimer;       // times the timing-related parts of the envelope
 unsigned long LEDEnvelopeTimer;    // just for the LED part
 unsigned long pot3Flash;           // for flashing the envelope pot light
+unsigned int IGateLength[8]; // for the gates! Per pot
 
 /* variables for picking up pot turns */
 unsigned int lastClockPotValue;  // where the pot was when mode last changed
 unsigned int storedClockRate;    // the CCMP value saved when mode changed
-bool clockPotPickedUp = false;   // has the pot found its pickup point yet?
+bool clockPotPickedUp = true;    // has the pot found its pickup point yet?
 bool envPotPickedUp = false;     // for the envelope pot
 int Ediff;                       // difference for the envelope pot pickup
-
-
-
 
 /* here's the variables we'll use for the clock*/
 volatile byte clockTicks = 0;  // this is for the main timer
@@ -78,6 +90,7 @@ byte currentStep;              // keeps track of what step the sequencer is on
 byte numSteps = 8;             // basic circle sequence, a nice default, but can be RADICALLY changed :D
 unsigned long stepFlash;       // timer for white flash on step change
 unsigned long pot1Flash;       // for flashing the clock pot
+bool doStepSelection = false;  // this says HEY METAMODE KNOB EQUALS STEP SELECTOR NOW
 
 /*Modes and Sequence Stuff*/
 
@@ -86,6 +99,27 @@ unsigned long pot1Flash;       // for flashing the clock pot
 
 
 unsigned long aTimer;  // times the analogRead functions to 200 times per second
+
+
+
+bool shift;
+unsigned long shiftPressedDebounce;  // the shift key gets its own debounce timer!
+byte shiftTracker;                   // shift button modes, one or two?
+bool circlePotValueChanged[8];       // if the shift key is pressed AND something else is done, well, that means don't change tracker position
+byte slewValue[8];                   // HERE'S THE VARIABLE that contains slews for each circle pot
+int oldPotsValue[8];                 // old pots value, for setting the circlePotValueChanged value
+byte potNeedCatch[8];                // all 8 circle pots might get unlatched!!! Eeek
+unsigned long CPotTimer[8];          // this is for FLASHYFLASH when the circlepots get back into being latched
+int RTPots[8];                       // real time circle pot readings
+unsigned int currentCV;              // for glide, current CV
+unsigned long glideTimer;            // for glide, the timer for it :P
+unsigned int targetCV;               // where we heading toward?
+
+
+
+
+
+
 
 
 
@@ -124,15 +158,15 @@ void setup() {
                              // now the LED output for the shift key
   pinMode(PIN_PA6, OUTPUT);  // shift key LED
 
-  analogSampleDuration(8);   // gives the ADC caps a bit of extra time to load
+  analogSampleDuration(16);  // gives the ADC caps a bit of extra time to load
   analogReadResolution(12);  // the AVR128DB has 12 bit analog read resolution! That's 4096 values!!! May as well use it
 
 
-  VREF.DAC0REF = 0x05; // writing to this register enables VDD voltage reference for the DAC
-  DAC0.CTRLA = DAC_ENABLE_bm | DAC_OUTEN_bm; // and this enables that DAC
-  
-  
-  VREF.ADC0REF = VREF_REFSEL_VDD_gc;          // this WEIRD line selects VCC (5V) as the voltage reference for analog reads
+  VREF.DAC0REF = 0x05;                        // writing to this register enables VDD voltage reference for the DAC
+  DAC0.CTRLA = DAC_ENABLE_bm | DAC_OUTEN_bm;  // and this enables that DAC
+
+
+  VREF.ADC0REF = VREF_REFSEL_VDD_gc;  // this WEIRD line selects VCC (5V) as the voltage reference for analog reads
   // I guess DXCore has a bug where it writes analogReference(VDD) to the wrong register?
   setupClock();  // starting the clock in the setup routine
 }
