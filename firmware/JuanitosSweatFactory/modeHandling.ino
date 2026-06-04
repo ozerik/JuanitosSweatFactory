@@ -3,12 +3,14 @@ void modeHandling() {  // runs when it's time to do the next step!
 
 
   static byte oldMode;
-  if (mode == 0) {                // okay here's linear mode!!!!
-    if (metaMode < 8) {           // 7 and below. 7 should just reset to 0 every time. 0 should go 7 steps backwards
-      static byte countDown = 8;  // declare countDown, the variable that will be decremented once per step
-      if (mode != oldMode) {      // check to see if the mode has changed, let's start from a blank page
-        countDown = 8;            // and countdown becomes 8.
-      }                           // so the pattern should be 0, 7, 6 repeating. metaMode stays 6 for this exercise
+  if (mode == 0) {            // okay here's linear mode!!!!
+    if (metaMode < 8) {       // 7 and below. 7 should just reset to 0 every time. 0 should go 7 steps backwards
+      if (mode != oldMode) {  // check to see if the mode has changed, let's start from a blank page
+        UP = true;            // fixes cylon mode
+        patternCount = 0;     // pattern modes
+        oldMode = mode;       // resets this if() statement
+        countDown = 8;        // and countdown becomes 8.
+      }                       // so the pattern should be 0, 7, 6 repeating. metaMode stays 6 for this exercise
       if (countDown == 8) {
         currentStep = 0;                         // top of pattern
         loopStart = true;                        // trigger the loopStart
@@ -24,21 +26,18 @@ void modeHandling() {  // runs when it's time to do the next step!
         loopStart = true;                        // trigger the loopStart
       }
     }
-  } else if (mode == 1) {  // CYLON MODE!!! Up and then down
-    // if (mode != oldMode) {            // check to see if the mode has changed, let's start from a blank page
-    //   currentStep = currentStep % 8;  // and countdown becomes 8.
-    // }
-    static bool UP;                          // this was so easy compared to the going down thing
+  } else if (mode == 1) {                    // CYLON MODE!!! Up and then down
     if (UP) {                                // my poor brain was just stuck. Blocked.
       currentStep++;                         // counting up
       if (currentStep > metaMode) UP = !UP;  // or switching the UP variable
     } else {                                 // ... so simple
       currentStep--;                         // counting down
-      if (currentStep <= 0) UP = !UP;        // and switching the UP variable back
-      loopStart = true;                      // trigger the loopStart
+      if (currentStep <= 0) {                // cool, we're at the start of the loop
+        UP = !UP;                            // and switching the UP variable back
+        loopStart = true;                    // restart the loop yo
+      }                                      // trigger the loopStart
     }
   } else if (mode == 2) {                           // patterns PATTERNS ***PPPPPAATTEERRNNNNSNSSS**** OMGGGEEEE
-    static byte patternCount;                       // variable for counting pattern
     static byte oldMetaMode;                        // keeps track of old meta mode
     if (metaMode != oldMetaMode) patternCount = 0;  // blank slate, clears pattern count in case the previous one and this one are'nt compatible
     oldMetaMode = metaMode;                         // store that variable
@@ -1057,17 +1056,29 @@ void modeHandling() {  // runs when it's time to do the next step!
 
 
   // this line VVV sets the targetCV for glide, just in case
-  targetCV = circlePots[currentStep & 0x07] >> 2;  // divide the circlepot value by 4, from 0-4095 to 0-1023
-  glideTimer = millis();
+  // targetCV = circlePots[currentStep & 0x07] >> 2;  // divide the circlepot value by 4, from 0-4095 to 0-1023
+  // targetCV = circlePots[currentStep & 0x07];  //Nope, do NOT divide by 4, already done in analogReads() DUH
+  glideTimer = millis();  // this is for glide timer over in the loop
 
-  if (slewValue[currentStep & 0x07] == 0) { // checks to see if we need to glide?
-    writeDAC(circlePots[currentStep & 0x07]);  // why the hex code? I can't remember... pretty sure that's bitmasking all but the lowest 4 bits out
+  // if (slewValue[currentStep & 0x07] == 0) {    // checks to see if we need to glide?
+  //   writeDAC(circlePots[currentStep & 0x07]);  // why the hex code? I can't remember... pretty sure that's bitmasking all but the lowest 4 bits out
+  // }
+
+  if (circlePots[currentStep] > 0) {
+    PORTF.OUTSET = (1 << 4);
+    gateForRecord = true;
+  } else {
+    PORTF.OUTCLR = (1 << 4);
+    gateForRecord = false;
   }
 
-  if (circlePots[currentStep] > 0) PORTF.OUTSET = (1 << 4);
-  else PORTF.OUTCLR = (1 << 4);
-
-  PORTF.OUTSET = (1 << 2);                 // turns the clock output signal HIGH
-  if (loopStart) PORTF.OUTSET = (1 << 3);  // turns the END/START OF LOOP signal HIGH
-  stepFlash = millis();                    // Time flashes and dimming of the LEDs in the circle
+  PORTF.OUTSET = (1 << 2);      // turns the clock output signal HIGH
+  if (loopStart) {              // did the loop just start?
+    PORTF.OUTSET = (1 << 3);    // turns the END/START OF LOOP signal HIGH
+    if (record == true) {       // are we recording?
+      recordBOC = recordSteps;  // saves the recordSteps value to the variable to say START LOOP
+      recordSteps = 0;          // keeps the recordSteps synched with the main loop
+    }
+  }
+  stepFlash = millis();  // Time flashes and dimming of the LEDs in the circle
 }

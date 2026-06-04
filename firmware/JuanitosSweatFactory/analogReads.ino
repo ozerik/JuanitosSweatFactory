@@ -66,12 +66,17 @@ void analogReads() {
       targetHue[1] = 0;
       targetSat[1] = 255;
       targetVal[1] = 100;
-    }
-    if (topRowPots[1] > 4090) {  // this part turns the metaMode pot into a step selector, to more easily tune the knobs
+    } 
+    static byte oldStep;
+    if (topRowPots[1] > 4090) {                     // this part turns the metaMode pot into a step selector, to more easily tune the knobs
+      if (!doStepSelection) oldStep = currentStep;  // save on entry
       doStepSelection = true;
       targetSat[1] = 0;
       targetVal[1] = 255;
-    } else doStepSelection = false;
+    } else {
+      if (doStepSelection) currentStep = oldStep;   // restore on exit
+      doStepSelection = false;
+    }
 
     static int oldMetaModePotValue;
     static byte oldMetaMode;
@@ -115,7 +120,7 @@ void analogReads() {
       currentStep = map(topRowPots[2], 0, 4095, 5, 12);    // 5 to 12 what the???
       if (currentStep > 7) currentStep = currentStep - 8;  // see, the pointer of the metaMode pot points sorta in the direction of the current pot
       targetHue[2] = targetHue[currentStep + 4];           // yeah, gotta do math because currentPot needs to roll over
-      writeDAC(circlePots[currentStep & 0x07]);            // draw the LED color without latency (200Hz I guess)
+      // writeDAC(circlePots[currentStep & 0x07]);            // draw the LED color without latency (200Hz I guess)
     }
   }
 

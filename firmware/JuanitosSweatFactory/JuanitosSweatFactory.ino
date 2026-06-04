@@ -1,3 +1,5 @@
+
+
 #include <APA102.h>
 #include <arduino.h>
 
@@ -15,7 +17,7 @@ byte mode;     // specifically mode of sequence, from "linear" to cylon to patte
 int metaMode;  // modifies the mode of the sequences
 
 const int shortGlide = 300;
-const int longGlide = 1100;
+const int longGlide = 1500;
 
 
 
@@ -49,6 +51,8 @@ byte clockDivider;
 byte oldClockDivider;
 const byte hysteresisWindow = 200;
 int oldClockPotValue;
+int oldEnvPotValue;  // for track forking, to make module play recorded track without being altered by SEQUENCER
+
 
 
 
@@ -73,7 +77,7 @@ bool loopStart = false;            // tracker for the start of the loop. Just fo
 unsigned long envelopeTimer;       // times the timing-related parts of the envelope
 unsigned long LEDEnvelopeTimer;    // just for the LED part
 unsigned long pot3Flash;           // for flashing the envelope pot light
-unsigned int IGateLength[8]; // for the gates! Per pot
+unsigned int IGateLength[8];       // for the gates! Per pot
 
 /* variables for picking up pot turns */
 unsigned int lastClockPotValue;  // where the pot was when mode last changed
@@ -86,7 +90,7 @@ int Ediff;                       // difference for the envelope pot pickup
 volatile byte clockTicks = 0;  // this is for the main timer
 byte ppqnCounter;              // pulse per quarter note, MIDI uses 24
 byte ppqnPerStep = 24;         // MIDI uses this, so you can get 8ths or 16ths by dividing by 2 or 4
-byte currentStep;              // keeps track of what step the sequencer is on
+int currentStep;               // keeps track of what step the sequencer is on
 byte numSteps = 8;             // basic circle sequence, a nice default, but can be RADICALLY changed :D
 unsigned long stepFlash;       // timer for white flash on step change
 unsigned long pot1Flash;       // for flashing the clock pot
@@ -95,7 +99,9 @@ bool doStepSelection = false;  // this says HEY METAMODE KNOB EQUALS STEP SELECT
 /*Modes and Sequence Stuff*/
 
 
-
+byte countDown = 8;     // global variables to reset
+bool UP = true;         // because when they were local static variables
+byte patternCount = 0;  // the modes would get messed up
 
 
 unsigned long aTimer;  // times the analogRead functions to 200 times per second
@@ -108,13 +114,21 @@ byte shiftTracker;                   // shift button modes, one or two?
 bool circlePotValueChanged[8];       // if the shift key is pressed AND something else is done, well, that means don't change tracker position
 byte slewValue[8];                   // HERE'S THE VARIABLE that contains slews for each circle pot
 int oldPotsValue[8];                 // old pots value, for setting the circlePotValueChanged value
-byte potNeedCatch[8];                // all 8 circle pots might get unlatched!!! Eeek
+bool potNeedCatch[8];                // all 1s to keep all the pots from flashing on powerup
 unsigned long CPotTimer[8];          // this is for FLASHYFLASH when the circlepots get back into being latched
 int RTPots[8];                       // real time circle pot readings
 unsigned int currentCV;              // for glide, current CV
 unsigned long glideTimer;            // for glide, the timer for it :P
 unsigned int targetCV;               // where we heading toward?
 
+
+bool record = true;                // sets the record flag
+unsigned int recordSteps;          // tracks where the recording is
+unsigned int recorded[1536];       // should be long enough? 64 steps of values. Records one value per peak, holds the CV and the gate
+byte recordedB[1536];              // 64 step variable dedicated to the envelope
+bool gateForRecord;                // gate value to record into array
+int recordBOC;                     // recorded Beginning of Cycle for record BOC
+int arPD7TEMP; // holds the value of arPD7, the envelope pot
 
 
 
@@ -124,6 +138,8 @@ unsigned int targetCV;               // where we heading toward?
 
 
 void setup() {
+  /*DELAY to allow power supply caps to charge*/
+  delay(1000);
   /*INPUTS*/
   pinMode(PIN_PD4, INPUT);  // circlePot 1 (zero, don't forget it's address number zero in the array)
   pinMode(PIN_PD5, INPUT);  // circlePot 2 (these are the circlePot input pins) They default to INPUT,
@@ -147,10 +163,38 @@ void setup() {
 
   /*OUTPUTS*/
   // pinMode(PIN_PD6, OUTPUT);  // main high-quality 10-bit analog out
+
+
+  // CHATGPT and Claude helped with this part. Thanks, robots
+
+  PORTMUX.TCAROUTEA = PORTMUX_TCA0_PORTA_gc;
+
+  TCA0.SPLIT.CTRLA = 0;  // stop timer
+
+  TCA0.SPLIT.CTRLB = TCA_SPLIT_HCMP0EN_bm     // PA3 = WO3 = H timer CMP0
+                     | TCA_SPLIT_HCMP1EN_bm   // PA4 = WO4 = H timer CMP1
+                     | TCA_SPLIT_HCMP2EN_bm;  // PA5 = WO5 = H timer CMP2
+
+  TCA0.SPLIT.HPER = 255;  // H timer period
+
+  TCA0.SPLIT.HCMP0 = 0;  // PA3
+  TCA0.SPLIT.HCMP1 = 0;  // PA4
+  TCA0.SPLIT.HCMP2 = 0;  // PA5
+
+  TCA0.SPLIT.CTRLA = TCA_SPLIT_CLKSEL_DIV1_gc
+                     | TCA_SPLIT_ENABLE_bm;
+
+
+
+
+
+
+
   pinMode(PIN_PA3, OUTPUT);  // filtered PWM analog out 2
-  pinMode(PIN_PA4, OUTPUT);  // filtered PWM out 3
+  pinMode(PIN_PA4, OUTPUT);  // filtered PWM analog out 3
   pinMode(PIN_PA5, OUTPUT);  // filtered PWM out 4
-                             // okay that's the top row of outputs
+
+  // okay that's the top row of outputs
   pinMode(PIN_PF2, OUTPUT);  // gate or trigger out 1
   pinMode(PIN_PF3, OUTPUT);  // gate or trigger out 2
   pinMode(PIN_PF4, OUTPUT);  // gate or trigger out 3
@@ -158,15 +202,13 @@ void setup() {
                              // now the LED output for the shift key
   pinMode(PIN_PA6, OUTPUT);  // shift key LED
 
-  analogSampleDuration(16);  // gives the ADC caps a bit of extra time to load
+  analogSampleDuration(4);   // gives the ADC caps a bit of extra time to load
   analogReadResolution(12);  // the AVR128DB has 12 bit analog read resolution! That's 4096 values!!! May as well use it
 
 
   VREF.DAC0REF = 0x05;                        // writing to this register enables VDD voltage reference for the DAC
   DAC0.CTRLA = DAC_ENABLE_bm | DAC_OUTEN_bm;  // and this enables that DAC
-
-
-  VREF.ADC0REF = VREF_REFSEL_VDD_gc;  // this WEIRD line selects VCC (5V) as the voltage reference for analog reads
+  VREF.ADC0REF = VREF_REFSEL_VDD_gc;          // this WEIRD line selects VCC (5V) as the voltage reference for analog reads
   // I guess DXCore has a bug where it writes analogReference(VDD) to the wrong register?
   setupClock();  // starting the clock in the setup routine
 }
@@ -202,7 +244,7 @@ void setupClock() {
   TCB0.INTCTRL = TCB_CAPT_bm;                      // enabling the interrupt
                                                    // we're gonna enable *just* the "enable" bit here, to enable TCB0
   TCB0.CTRLA |= TCB_ENABLE_bm;                     // _bm stands for bit mask. The |= just writes that one bit, leaving the rest of the byte alone
-  sei();                                           /* "sei" stands for Set Enable Interrupts. The old "enableInterrupts()" is not a part of DXCore, so gotta use this instead
+  sei();                                           /* "sei" stands for Set Interrupts. The old "enableInterrupts()" is not a part of DXCore, so gotta use this instead
   the converse is cli() which replaces "disableInterrupts()" and means "Clear Interrupts". So far, the interrupt just writes one boolean value
   so I don't know if we'll need to disable interrupts aka cli();*/
 }
@@ -217,4 +259,28 @@ ISR(TCB0_INT_vect) {
 
 void loop() {
   lewp();
+  // TCA0.SPLIT.HCMP0 = 255;  // full
+  // delay(500);
+  // TCA0.SPLIT.HCMP0 = 128;  // half
+  // delay(500);
+  // TCA0.SPLIT.HCMP0 = 64;   // quarter
+  // delay(500);
+  // TCA0.SPLIT.HCMP0 = 0;    // zero
+  // delay(500);
+  // TCA0.SPLIT.HCMP1 = 255;  // full
+  // delay(500);
+  // TCA0.SPLIT.HCMP1 = 128;  // half
+  // delay(500);
+  // TCA0.SPLIT.HCMP1 = 64;   // quarter
+  // delay(500);
+  // TCA0.SPLIT.HCMP1 = 0;    // zero
+  // delay(500);
+  // TCA0.SPLIT.HCMP2 = 255;  // full
+  // delay(500);
+  // TCA0.SPLIT.HCMP2 = 128;  // half
+  // delay(500);
+  // TCA0.SPLIT.HCMP2 = 64;   // quarter
+  // delay(500);
+  // TCA0.SPLIT.HCMP2 = 0;    // zero
+  // delay(500);
 }

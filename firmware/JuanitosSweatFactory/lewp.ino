@@ -1,7 +1,6 @@
 void lewp() {
 
   static bool oldShift;                                // shift state tracker for debouncing
-  static bool anyCirclePotChanged;                     // tracks ANY change in the pots
   shift = !(PORTA.IN & (1 << 7));                      // shift key (button) handler. This reads the position of the key
   if (shift != oldShift) {                             // has the value changed? this happens only once per debounce
     if (millis() - shiftPressedDebounce > debounce) {  // debounce timer
@@ -9,7 +8,7 @@ void lewp() {
       oldShift = shift;                                // and say "hey, the key/button is in a constant state"
     }                                                  // debounce done
                                                        // this next part runs just once per shift button press:
-    if (shift) {                                       // is the key pressed? THIS ONLY HAPPENS ONCE PER BUTTON PRESS
+    if (shift) {                                       // ONCE PER PRESS is the key pressed?
       for (byte i = 0; i < 8; i++) {                   // a for loop to....
         circlePotValueChanged[i] = false;              // so far, none of the values have changed because this is just, like, this instant
         potNeedCatch[i] = false;                       // hmm, maybe this is the name of the variable I used for this
@@ -17,10 +16,10 @@ void lewp() {
       }                                                // 0 to 1024, by the way
                                                        // and t his next part just just once per shift button RELEASED
     } else {                                           // this code below here only happens when the shift key is RELEASED!!!! So clever
-      shiftTracker++;                                  // here's the spot where stuff happens. In this case, keeping track of 3 shift-key modes
-      if (anyCirclePotChanged) shiftTracker--;         // NOPE, we don't actually want to change modes
-      if (shiftTracker > 2) shiftTracker = 0;          // loops
-      anyCirclePotChanged = false;                     // reset the pots-changed variable
+      // shiftTracker++;                                  // here's the spot where stuff happens. In this case, keeping track of 3 shift-key modes
+      // if (anyCirclePotChanged) shiftTracker--;         // NOPE, we don't actually want to change modes
+      // if (shiftTracker > 2) shiftTracker = 0;          // loops
+      // anyCirclePotChanged = false;                     // reset the pots-changed variable
     }
   }
 
@@ -28,18 +27,36 @@ void lewp() {
 
 
 
+  if (shift) {                                    // EVERY every lewp()
+    if ((oldEnvPotValue >> 6) != (arPD7 >> 6)) {  // envPot changed
+      if (oldEnvPotValue < arPD7) {               // the pot was turned UP
+        record = false;                           // stop recording, just playback
+      } else {                                    // okay go back to recording
+        record = true;                            // yup, RECORD NOW
+        // some visuals would rule to show the recording mode is turned off
+      }
+      envPotPickedUp = false;  // omg this might be enough to get it back picked up after toggling trackFork
+      oldEnvPotValue = arPD7;
+    } else if (record == true) arPD7TEMP = arPD7;
+  }
+
+
+
+
+
+
+
 
   // I think this works VVVVV
-  if (shiftTracker == 0) {                                   // shift mode one, adjust slew value between steps
-    if (shift) {                                             // if shift key is pressed.... happens every lewp()
+  if (true) {                                                // NOPE GOT RID OF DIFFERENT SHIFT MODES shift mode one, adjust slew value between steps
+    if (shift) {                                             // Every Loop. if shift key is pressed?
       for (byte i = 0; i < 8; i++) {                         // run around the circle of pots WHILE SHIFT is being held
         if (((oldPotsValue[i] >> 6) != (RTPots[i] >> 6))) {  // the >> 6 introduces a 64-value buffer zone for jitter
-          anyCirclePotChanged = true;
-          potNeedCatch[i] = true;  // can be turned into a two-byte register for this value if I need 6 bytes
-          if (RTPots[i] > oldPotsValue[i]) {
+          potNeedCatch[i] = true;                            // it's true. We're all looking for whoever is responsible for this
+          if (RTPots[i] > oldPotsValue[i]) {                 // this checks if WHOEVER IT WAS turned the knob up?
             slewValue[i] = constrain(((RTPots[i] - oldPotsValue[i]) >> 6), 0, 2);
           } else if (slewValue[i] > 0) {  // slew needs to be turned down
-            slewValue[i] = 0;             // looks for OVERFLOWS because this can't go negative, it's just a byte
+            slewValue[i] = 0;             // makes slew just be zero
           }
           targetHue[i + 4] = 210;  // reddish pink?
           targetVal[i + 4] = constrain(slewValue[i] << 3, 0, 255);
@@ -72,10 +89,9 @@ void lewp() {
     }
   } else if (shiftTracker == 1) {                          // okay let's call this the gate length section
                                                            // it'll be a duplicate of the slew setting part, but be for gate length instead
-    if (shift) {                                           // if shift key is pressed.... happens every lewp()
+    if (shift) {                                           // Happens every lewp() in gate section
       for (byte i = 0; i < 8; i++) {                       // run around the circle of pots WHILE SHIFT is being held
         if ((oldPotsValue[i] >> 6) != (RTPots[i] >> 6)) {  // the >> 6 introduces a 64-value buffer zone for jitter
-          anyCirclePotChanged = true;                      // this stops the colors from continuing to be displayed for the pot that's close
           potNeedCatch[i] = true;                          // can be turned into a two-byte register for this value if I need 6 bytes
           IGateLength[i] = RTPots[i] << 2;                 // << 2 allows the gate to be set between zero and 2047 milliseconds
           targetHue[i + 4] = 150;                          // blue I think?
@@ -109,6 +125,7 @@ void lewp() {
         }
       }
     }
+  } else {  // this is the  shift-mode THREEEEEEEE
   }
   // I think this part ^^^^ works now?
 
@@ -147,14 +164,17 @@ void lewp() {
   }
 
 
-  // analog read subroutine. Run it 200 times per second or whatever
+  // analog read, write LEDs, and glide subroutines. Run 330 times per second or whatever
   if (clockPotPickedUp == false || envPotPickedUp == false) analogReads();
-  if (millis() - aTimer > 3) {  // run it 200 times per second
-    analogReads();              // analog reads all 12 analog pin inputs
-    writeLEDs();                // runs the "write LEDs" subroutine
-    aTimer = millis();          // reset the timer
-    glide();                    // run the glide part
-  }                             // this code works great!
+  if (millis() - aTimer > 3) {                  // run it 330 times per second
+    analogReads();                              // analog reads all 12 analog pin inputs
+    writeLEDs();                                // runs the "write LEDs" subroutine
+    aTimer = millis();                          // reset the timer
+    glide();                                    // run the glide part
+    targetCV = circlePots[currentStep & 0x07];  //Nope, do NOT divide by 4, already done in analogReads() DUH
+    writeDAC(currentCV);                        // so we can write it to the DAC
+    // TCA0.SPLIT.HCMP0 = currentCV;               // here's the secondary (recorded) CV output?
+  }  // this code works great!
 
   envPressed = !(PORTB.IN & (1 << 2));               // is true while button pressed
   if (envPressed != oldEnvPressed) {                 // here's how we choose the parameter of the ADSR
@@ -170,7 +190,7 @@ void lewp() {
   }
 
   /* envelope pot picker-upper, catcher, complicated?*/
-  if (envPotPickedUp == false) {                          // envelope pot in wrong position
+  if ((envPotPickedUp == false) && (record == true)) {    // envelope pot in wrong position
     byte tempEnvPot = map(arPD7, 0, 4095, 0, 255);        // work with low-res LED values
     if (envelopeMode == 0) Ediff = attack - tempEnvPot;   // it's adjusting ATTACK
     if (envelopeMode == 1) Ediff = decay - tempEnvPot;    // adjusting decay
@@ -193,7 +213,7 @@ void lewp() {
       pot3Flash = millis();                         // tryinna get the pot to flash when it's picked up
       envPotPickedUp = true;                        // YESSSS, we did it.
     }
-  } else {
+  } else if (record == true) {
     byte envValue = arPD7 >> 4;       // gets pot readings into ADSR values. >> means "move binary over 4 places" which divides 4095 by sixteen
     switch (envelopeMode) {           // handles putting variables in to the ADSR envelope
       case 0:                         // attack, potentiometer shades of white
@@ -348,7 +368,6 @@ void lewp() {
     unsigned long elapsed = millis() - envelopeTimer;                  // how long has it been?
     unsigned long duration = map(attack, 0, 255, 1, 2000);             // map "attack" to however long the attack will actually be
     envelopeValue = map(elapsed, 0, duration, attackStartValue, 255);  // map duration to how high
-    analogWrite(PIN_PA5, envelopeValue);                               // write that freaking value!
     if (elapsed > duration) {
       playEnvTracker = 3;
       envelopeTimer = millis();
@@ -357,13 +376,13 @@ void lewp() {
     unsigned long elapsed = millis() - envelopeTimer;         // how long?
     unsigned long duration = map(decay, 0, 255, 10, 2000);    // two second decay?
     envelopeValue = map(elapsed, 0, duration, 255, sustain);  // map to possible voltage outputs
-    analogWrite(PIN_PA5, envelopeValue);                      // and do the writing
+    // analogWrite(PIN_PA5, envelopeValue);                                             // and do the writing
     if (elapsed > duration) {
       playEnvTracker = 4;  // move on to sustain
       envelopeTimer = millis();
     }
   } else if (playEnvTracker == 4) {  // SUSTAIN! The simplest of all the envelope parameters
-    analogWrite(PIN_PA5, sustain);   // already 0 to 255, no need to update it. Just play this sustain value forever
+    // analogWrite(PIN_PA5, sustain);   // already 0 to 255, no need to update it. Just play this sustain value forever
     if (millis() - envelopeTimer > IGateLength[currentStep & 0x07]) {
       playEnvTracker = 5;
     }
@@ -379,9 +398,11 @@ void lewp() {
 
 
 
-    analogWrite(PIN_PA5, envelopeValue);         // ugh, we shall see
+    // analogWrite(PIN_PA5, envelopeValue);         // ugh, we shall see
     if (elapsed > duration) playEnvTracker = 0;  // back to "nothing is playing" not super necessary.
   }
+  if (playEnvTracker == 4) envelopeValue = sustain;
+
 
 
   bool clockPressed = !(PORTB.IN & (1 << 1));  // will happen when clock-pot button is pressed.
@@ -502,11 +523,36 @@ void lewp() {
     }
   }
 
-  if (clockTicks > 0) {                                     // clockTick handler
-    cli();                                                  // clear interrupts,
-    clockTicks--;                                           // minus one from clockTicks variable
-    sei();                                                  // set interrupts again
-    ppqnCounter++;                                          // adds 1 to the value of ppqnCounter
+  if (clockTicks > 0) {  // clockTick handler
+    cli();               // clear interrupts,
+    clockTicks--;        // minus one from clockTicks variable
+    sei();               // set interrupts again
+    ppqnCounter++;       // adds 1 to the value of ppqnCounter
+    recordSteps++;       // adds 1 to the recordSteps.
+    // static int recordBOC;  // tracks when to restart (Beginning of Cycle) the recorded loop
+    if (recordSteps > 1536) recordSteps = 0;  // overflow protection
+
+    if (record == true) {
+      // here's where we record all the right-now values into the arrary for playback
+      // remember that the recorded[] array has THREE important values, that's what the bitmasking is about
+      recorded[recordSteps] = (uint16_t)(gateForRecord << 15)  // gate, on or off
+                              | (currentCV & 0x03FF);          // the CV, 10 bits, 1024 values
+      recordedB[recordSteps] = envelopeValue;
+
+    } else if (recordSteps >= recordBOC) recordSteps = 0;
+    /*PLAY RECORDED STUFF RIGHT HERE??????*/
+    if ((recorded[recordSteps] >> 15) & 1)      // bitshift the recorded value to only see the most significant bit, which plays a gate???
+      PORTF.OUTSET = (1 << 5);                  // then if it's TRUE, play the gate out of the gateOut 2
+    else PORTF.OUTCLR = (1 << 5);               // if it's FALSE, do not play the gate
+    TCA0.SPLIT.HCMP2 = envelopeValue;           // play the current envelopeValue from the HCMP2 PWM pin (jeez)
+    TCA0.SPLIT.HCMP1 = recordedB[recordSteps];  // here's playback of the full-resolution envelope THIS PART SEEMS BROKEN
+
+    // if ((recorded[recordSteps] >> 14) & 1)      // looks for the recorded loop to begin
+    //   recordSteps = 0;                          // recorded track BOC
+
+
+
+
     CFC++;                                                  // CFC equals clock flash counter haha -- this is just for the clock LED to go brighter and dimmer
     if (CFC > 23) CFC = 0;                                  // reset CFC
     if (ppqnCounter >= ppqnPerStep) {                       // has the PPQN threshold been reached?
@@ -525,8 +571,18 @@ void lewp() {
     }
   }
 
+  loopStart = false;
+
   if (millis() - stepFlash > 8) {  // time how long the HIGH signals for trigger outs last
     PORTF.OUTCLR = (0b00001100);   // hey, turn off those HIGH signals for the clock out and end/start of loop signals
-    loopStart = false;
   }
+
+  if (record == false) {                                                              // the tracks have been FORKED!!!!
+    targetHue[3] = 0;                                                                 // red. These colors mean PLAYBACK and is happening
+    targetSat[3] = 255;                                                               // also, gesture record!!!!
+    if (ppqnCounter < (ppqnPerStep >> 1)) {                                           // on the way up, brighter <-- this part just makes the envPot "breathe" red
+      targetVal[3] = map(ppqnCounter, 0, (ppqnPerStep >> 1), 0, 255);                 // maps to full bright
+    } else targetVal[3] = map(ppqnCounter, (ppqnPerStep >> 1), ppqnPerStep, 255, 0);  // full bright to zero
+    writePWM(recorded[recordSteps]);                                                  // plays back the recorded CV with the writePWM() function
+  } else writePWM(currentCV);                                                         // writes currentCV to the PM0 PWM pin. That PWM pin can only handle 8-bit values, but currentCV is a 10-bit value, so there's some clever dithering goinn on there :D
 }
