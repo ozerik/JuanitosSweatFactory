@@ -122,13 +122,19 @@ unsigned long glideTimer;            // for glide, the timer for it :P
 unsigned int targetCV;               // where we heading toward?
 
 
-bool record = true;                // sets the record flag
-unsigned int recordSteps;          // tracks where the recording is
-unsigned int recorded[1536];       // should be long enough? 64 steps of values. Records one value per peak, holds the CV and the gate
-byte recordedB[1536];              // 64 step variable dedicated to the envelope
-bool gateForRecord;                // gate value to record into array
-int recordBOC;                     // recorded Beginning of Cycle for record BOC
-int arPD7TEMP; // holds the value of arPD7, the envelope pot
+bool record = true;           // sets the record flag
+unsigned int recordSteps;     // tracks where the recording is
+unsigned int recorded[1536];  // should be long enough? 64 steps of values. Records one value per peak, holds the CV and the gate
+byte recordedB[1536];         // 64 step variable dedicated to the envelope
+bool gateForRecord;           // gate value to record into array
+unsigned int recordBOC = 500;  // recorded Beginning of Cycle for record BOC
+int arPD7TEMP;                // holds the value of arPD7, the envelope pot
+bool ignoreClockPot = false;  // ignore clock pot? NO!!! Except yes, in tapTempo()
+unsigned int newCCMP;         // new compare contrast (???) match point for the timer
+byte tapCount;                // counts taps in tapTempo()
+bool GS;                      // gate state! for recording the gate state
+int arPD3;                    // sure, why not, analogRead(PIN_PD3) is this value
+unsigned int BOCtrack;        // maybe this will count how many ACTUAL pulses between clock resets???
 
 
 
@@ -139,7 +145,7 @@ int arPD7TEMP; // holds the value of arPD7, the envelope pot
 
 void setup() {
   /*DELAY to allow power supply caps to charge*/
-  delay(1000);
+  delay(400);
   /*INPUTS*/
   pinMode(PIN_PD4, INPUT);  // circlePot 1 (zero, don't forget it's address number zero in the array)
   pinMode(PIN_PD5, INPUT);  // circlePot 2 (these are the circlePot input pins) They default to INPUT,

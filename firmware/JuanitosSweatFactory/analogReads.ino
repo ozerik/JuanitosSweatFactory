@@ -7,12 +7,12 @@ void analogReads() {
   RTPots[5] = (analogRead(PIN_PE3) >> 2);
   RTPots[6] = (analogRead(PIN_PE2) >> 2);
   RTPots[7] = (analogRead(PIN_PE5) >> 2);
-  topRowPots[0] = analogRead(PIN_PD0);  // CV jack top left, clock input mostly
-  topRowPots[1] = analogRead(PIN_PD1);  // top row pots without switches under them
-  topRowPots[2] = analogRead(PIN_PD2);  // top row pots without switches under them
-  // topRowPots[3] = analogRead(PIN_PD3);  // CV jack top right REMOVING THIS FROM ANALOG READS because right now it's a gate input
-  arPE7 = analogRead(PIN_PE7);  // clock pot, high res
-  arPD7 = analogRead(PIN_PD7);  // envelope pot, high res
+  topRowPots[0] = analogRead(PIN_PD0);               // CV jack top left, clock input mostly
+  topRowPots[1] = analogRead(PIN_PD1);               // top row pots without switches under them
+  topRowPots[2] = analogRead(PIN_PD2);               // top row pots without switches under them
+  if (record == false) arPD3 = analogRead(PIN_PD3);  // CV jack top right, only does analogReads while being a gesture recorder
+  arPE7 = analogRead(PIN_PE7);                       // clock pot, high res
+  arPD7 = analogRead(PIN_PD7);                       // envelope pot, high res
 
   // okay here's where we check the pots against if they're picked up, and if they are, record new ACTUAL values
   for (byte i = 0; i < 8; i++) {
@@ -66,7 +66,7 @@ void analogReads() {
       targetHue[1] = 0;
       targetSat[1] = 255;
       targetVal[1] = 100;
-    } 
+    }
     static byte oldStep;
     if (topRowPots[1] > 4090) {                     // this part turns the metaMode pot into a step selector, to more easily tune the knobs
       if (!doStepSelection) oldStep = currentStep;  // save on entry
@@ -74,7 +74,7 @@ void analogReads() {
       targetSat[1] = 0;
       targetVal[1] = 255;
     } else {
-      if (doStepSelection) currentStep = oldStep;   // restore on exit
+      if (doStepSelection) currentStep = oldStep;  // restore on exit
       doStepSelection = false;
     }
 
@@ -132,6 +132,7 @@ void analogReads() {
   static bool firstRun = true;                          // all the envelope parameters should be what the pot
   if (firstRun) {                                       // is set to.
     attack = decay = sustain = release = (arPD7 >> 4);  // this line sets the envelope parameters to whatever the envelope pot is at startup
+    oldEnvPotValue = arPD7;                             // trying to keep the record mode from starting as soon as you push shfit
     firstRun = false;                                   // but just do it once, not every time through
   }
 }

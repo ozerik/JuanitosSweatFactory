@@ -1072,13 +1072,9 @@ void modeHandling() {  // runs when it's time to do the next step!
     gateForRecord = false;
   }
 
-  PORTF.OUTSET = (1 << 2);      // turns the clock output signal HIGH
-  if (loopStart) {              // did the loop just start?
-    PORTF.OUTSET = (1 << 3);    // turns the END/START OF LOOP signal HIGH
-    if (record == true) {       // are we recording?
-      recordBOC = recordSteps;  // saves the recordSteps value to the variable to say START LOOP
-      recordSteps = 0;          // keeps the recordSteps synched with the main loop
-    }
+  PORTF.OUTSET = (1 << 2);    // turns the clock output signal HIGH
+  if (loopStart == true) {    // did the loop just start?
+    PORTF.OUTSET = (1 << 3);  // turns the END/START OF LOOP signal HIGH
   }
   stepFlash = millis();  // Time flashes and dimming of the LEDs in the circle
 }
