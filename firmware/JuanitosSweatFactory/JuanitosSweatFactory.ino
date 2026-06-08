@@ -122,25 +122,27 @@ unsigned long glideTimer;            // for glide, the timer for it :P
 unsigned int targetCV;               // where we heading toward?
 
 
-bool record = true;           // sets the record flag
-unsigned int recordSteps;     // tracks where the recording is
-unsigned int recorded[1536];  // should be long enough? 64 steps of values. Records one value per peak, holds the CV and the gate
-byte recordedB[1536];         // 64 step variable dedicated to the envelope
-bool gateForRecord;           // gate value to record into array
-unsigned int recordBOC = 500;  // recorded Beginning of Cycle for record BOC
-int arPD7TEMP;                // holds the value of arPD7, the envelope pot
-bool ignoreClockPot = false;  // ignore clock pot? NO!!! Except yes, in tapTempo()
-unsigned int newCCMP;         // new compare contrast (???) match point for the timer
-byte tapCount;                // counts taps in tapTempo()
-bool GS;                      // gate state! for recording the gate state
-int arPD3;                    // sure, why not, analogRead(PIN_PD3) is this value
-unsigned int BOCtrack;        // maybe this will count how many ACTUAL pulses between clock resets???
-
-
-
-
-
-
+bool record = true;                    // sets the record flag
+unsigned int recordSteps;              // tracks where the recording is
+unsigned int recorded[1536];           // should be long enough? 64 steps of values. Records one value per peak, holds the CV and the gate
+byte recordedB[1536];                  // 64 step variable dedicated to the envelope
+bool gateForRecord;                    // gate value to record into array
+unsigned int recordBOC = 500;          // recorded Beginning of Cycle for record BOC
+int arPD7TEMP;                         // holds the value of arPD7, the envelope pot
+bool ignoreClockPot = false;           // ignore clock pot? NO!!! Except yes, in tapTempo()
+unsigned int newCCMP;                  // new compare contrast (???) match point for the timer
+byte tapCount;                         // counts taps in tapTempo()
+bool GS;                               // gate state! for recording the gate state
+int arPD3;                             // sure, why not, analogRead(PIN_PD3) is this value
+unsigned int BOCtrack;                 // maybe this will count how many ACTUAL pulses between clock resets???
+volatile bool extClock = false;        // flags that there's an external clock
+volatile unsigned long lastExtClock;   // time of the last external clock tick or pulse
+volatile byte internalPulseCount = 0;  // counts up to like 6 or 24 oor 12, depending on shift-clockPot setting?
+bool firstClock = true;                // watches for a first clock
+volatile bool run = true;              // stops internal clock when external clock exists
+unsigned long doubleClickTimer;        // times a double-click of shift button for HOLD and ENVELOPE (whee)
+bool doubleClick;                      // tracks the doubleClick state
+byte shiftStep;                        // for when doubleShift is active
 
 
 void setup() {
@@ -171,6 +173,9 @@ void setup() {
   // pinMode(PIN_PD6, OUTPUT);  // main high-quality 10-bit analog out
 
 
+  // HARDWARE INTERRUPT!!! This is for the clock input!
+  PORTD.PIN0CTRL = PORT_ISC_RISING_gc;  // interrupt on rising edge only
+
   // CHATGPT and Claude helped with this part. Thanks, robots
 
   PORTMUX.TCAROUTEA = PORTMUX_TCA0_PORTA_gc;
@@ -189,12 +194,6 @@ void setup() {
 
   TCA0.SPLIT.CTRLA = TCA_SPLIT_CLKSEL_DIV1_gc
                      | TCA_SPLIT_ENABLE_bm;
-
-
-
-
-
-
 
   pinMode(PIN_PA3, OUTPUT);  // filtered PWM analog out 2
   pinMode(PIN_PA4, OUTPUT);  // filtered PWM analog out 3
@@ -218,7 +217,6 @@ void setup() {
   // I guess DXCore has a bug where it writes analogReference(VDD) to the wrong register?
   setupClock();  // starting the clock in the setup routine
 }
-
 void setupClock() {
   /* we're gonna use the timer called TCB0 to run the sequence clock we're working with a variable PPQN (pulses per quarter note) to get different divisions
   of the clock that might be coming in from a MIDI device (24PPQN) or something else (4PPQN?)
@@ -254,13 +252,41 @@ void setupClock() {
   the converse is cli() which replaces "disableInterrupts()" and means "Clear Interrupts". So far, the interrupt just writes one boolean value
   so I don't know if we'll need to disable interrupts aka cli();*/
 }
+/* okay here's the internal timer Interrupt Service Routine */
+ISR(TCB0_INT_vect) {                 // INTERNAL CLOCK!!! Runs the in-between steps while extClock == true
+  TCB0.INTFLAGS = TCB_CAPT_bm;       // gotta clear the interrupt as soon as the interrupt fires!
+  if (extClock == true) {            // external mode! Only fire 5 or 23 times (for 16ths or 24PPQN)
+    internalPulseCount++;            // still gotta count up while extClock is happening
+    if (internalPulseCount < 5) {    // when external clock is here, do only five timer pulses
+      clockTicks++;                  // weird, this timer-based ISR just does this flag that the loop looks for as fast as the loop runs
+      extClock = false;              // stop after the 5th internal pulse???
+      run = false;                   // and keep it stopped???? Gotta set the timer somewhere too.
+    } else {                         // time to stop the timer pulses...
+      TCB0.CTRLA &= ~TCB_ENABLE_bm;  // ... which is what this does
+    }                                //
+  } else {                           // this happens when extClock == false    used to be else if (run == true)
+    clockTicks++;                    // count and count, just like regular
+  }
+}
 
-/* okay here's the Interrupt Service Routine */
+ISR(PORTD_PORT_vect) {           // this is the external clock ISR, ONLY happens when a clock comes in
+  PORTD.INTFLAGS = PIN0_bm;      // clearing the interrupt flag so it doesn't panic-run-AS-FAST-AS-POSSSSSSS
+  unsigned long now = micros();  // what time is it? BE PRECISE!!!
+  extClock = true;               // turns this variable on once per "firstClock"
 
-ISR(TCB0_INT_vect) {
-  //gotta clear the interrupt as soon as the interrupt fires!
-  TCB0.INTFLAGS = TCB_CAPT_bm;
-  clockTicks++;
+  if (firstClock == true) {  // firstClock?
+    firstClock = false;      // like it does here
+    lastExtClock = now;      // it's now again for the first time
+    clockTicks++;            // do the clock ticks advance but return; the next line to skip the long division
+    return;
+  } else clockTicks++;  // first pulse
+
+  unsigned long period = now - lastExtClock;
+  lastExtClock = now;
+  TCB0.CCMP = (uint16_t)(((uint64_t)23437 * period) / 6000000UL);  // hmm, will this work? * period) / 6000000UL);
+  internalPulseCount = 0;                                          // reset subdivision
+  TCB0.CNT = 0;
+  TCB0.CTRLA |= TCB_ENABLE_bm;  // enables the timer for the 5 times it goes
 }
 
 void loop() {

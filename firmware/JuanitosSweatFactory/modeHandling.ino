@@ -543,7 +543,7 @@ void modeHandling() {  // runs when it's time to do the next step!
         if (patternCount > 63) patternCount = 0;
         break;
     }
-  } else if (mode == 3) {
+  } else if (mode == 3) { // MORE PATTERNS
     static byte patternCount;                       // variable for counting pattern
     static byte oldMetaMode;                        // keeps track of old meta mode
     if (metaMode != oldMetaMode) patternCount = 0;  // blank slate, clears pattern count in case the previous one and this one are'nt compatible

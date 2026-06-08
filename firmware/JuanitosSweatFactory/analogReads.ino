@@ -7,10 +7,10 @@ void analogReads() {
   RTPots[5] = (analogRead(PIN_PE3) >> 2);
   RTPots[6] = (analogRead(PIN_PE2) >> 2);
   RTPots[7] = (analogRead(PIN_PE5) >> 2);
-  topRowPots[0] = analogRead(PIN_PD0);               // CV jack top left, clock input mostly
+  // topRowPots[0] = analogRead(PIN_PD0);               // CV jack top left, clock input mostly
   topRowPots[1] = analogRead(PIN_PD1);               // top row pots without switches under them
   topRowPots[2] = analogRead(PIN_PD2);               // top row pots without switches under them
-  if (record == false) arPD3 = analogRead(PIN_PD3);  // CV jack top right, only does analogReads while being a gesture recorder
+  // if (record == false) arPD3 = analogRead(PIN_PD3);  // CV jack top right, only does analogReads while being a gesture recorder
   arPE7 = analogRead(PIN_PE7);                       // clock pot, high res
   arPD7 = analogRead(PIN_PD7);                       // envelope pot, high res
 

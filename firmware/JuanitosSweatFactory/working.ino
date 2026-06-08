@@ -7,23 +7,18 @@ void gestureRecord() {
   // envPressed is the varialbe thats true when envelope pot is pressed
   // arPD7 is the envelope pot variable. Probably wanna read that every pusle not in analogReads()
   // analogRead(PIN_PD3) is the value of what's coming in the jack associated with the env pot
-  // gate HIGH line    recorded[recordSteps] |= (1 << 15);
-  // gate LOW line     recorded[recordSteps] &= ~(1 << 15);
-  if (shift == true) {                                           // shift button is pressed while we're gestureRecording
-    if (envPressed == true) recorded[recordSteps] |= (1 << 15);  // set the gate HIGH? right?
-    else recorded[recordSteps] &= ~(1 << 15);                    // clear that bit! Sets gate LOW. Pretty sure.
-  } else if (envPressed == true) {                               // shift is NOT pressed and yet, envelope pot button is!
-    int tempArPD3 = (analogRead(PIN_PD3) >> 2);
-    if (tempArPD3 > 1) recorded[recordSteps] |= (tempArPD3 & 0x03FF);
-    else recorded[recordSteps] |= ((arPD7 >> 2) & 0x03FF);  // knob setting
+
+
+  if (shift == true) {                                                 // shift button is pressed while we're gestureRecording
+    if (envPressed == true) recorded[recordSteps] |= (1 << 15);        // set the gate HIGH? right?
+    else recorded[recordSteps] &= ~(1 << 15);                          // clear that bit! Sets gate LOW. Pretty sure.
+  } else if (envPressed == true) {                                     // shift is NOT pressed and yet, envelope pot button is!
+    int tempArPD3 = (analogRead(PIN_PD3) >> 2);                        // reads PD3 (this is the jack  near the envelope pot), turns 12-bit number into 10-bits
+    uint16_t newCV;                                                    // let's use t his variable!
+    if (tempArPD3 > 24) newCV = tempArPD3 & 0x03FF;                    // take our analog value from the jack, see if there's anything plugged in there
+    else newCV = (arPD7 >> 2) & 0x03FF;                                // no? just use the pot position. Oh yeah, make sure we're bitmasking the important pins
+    recorded[recordSteps] = (recorded[recordSteps] & 0xFC00) | newCV;  // and write the bitmasked value to recorded[recordSteps]
   }
-
-
-
-
-
-
-  // gesture record goes here
 }
 
 void tapTempo() {

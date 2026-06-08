@@ -9,27 +9,34 @@ void lewp() {
       oldShift = shift;                                // and say "hey, the key/button is in a constant state"
     }                                                  // debounce done
                                                        // this next part runs just once per shift button press:
-    if (shift) {                                       // ONCE PER PRESS is the key pressed?
-      for (byte i = 0; i < 8; i++) {                   // a for loop to....
-        potNeedCatch[i] = false;                       // hmm, maybe this is the name of the variable I used for this
-        oldPotsValue[i] = circlePots[i];               // record the current pots into this value
-      }                                                // 0 to 1024, by the way
-                                                       // and t his next part just just once per shift button RELEASED
-    } else {                                           // this code below here only happens when the shift key is RELEASED!!!! So clever
+    if (shift) {                                       // ONCE PER PRESS!!! is the key pressed?
+      if (millis() - doubleClickTimer < 400) {         // looks for a quick double click
+        doubleClick = true;                            // shiftShift means YES, it's being held!
+        shiftStep = currentStep;                       // just for doubleClick mode :D
+
+      }                                   // that's all
+      doubleClickTimer = millis();        // timer for is this a doubleclick?
+      for (byte i = 0; i < 8; i++) {      // a for loop to....
+        potNeedCatch[i] = false;          // hmm, maybe this is the name of the variable I used for this
+        oldPotsValue[i] = circlePots[i];  // record the current pots into this value
+      }                                   // 0 to 1024, by the way
+                                          // and t his next part just just once per shift button RELEASED
+    } else {                              // this code below here only happens when the shift key is RELEASED!!!! So clever
+      doubleClick = false;                // no longer holding the shift button
 
       // if I can think of anything to do when the shift key is released, I should put it here
     }
   }
 
+
   if (shift) {                                    // EVERY every lewp()
-    if ((oldEnvPotValue >> 6) != (arPD7 >> 6)) {  // envPot changed
+    if ((oldEnvPotValue >> 7) != (arPD7 >> 7)) {  // envPot changed, 128 values either direction
       if (oldEnvPotValue < arPD7) {               // the pot was turned UP
         record = false;                           // stop recording, just playback
-
-      } else {                 // okay go back to recording, because the pot was turned down
-        record = true;         // yup, RECORD NOW
-      }                        // I THINK THIS IS WORKING NOW
-      envPotPickedUp = false;  // omg this might be enough to get it back picked up after toggling trackFork
+      } else {                                    // okay go back to recording, because the pot was turned down
+        record = true;                            // yup, RECORD NOW
+      }                                           // I THINK THIS IS WORKING NOW
+      envPotPickedUp = false;                     // omg this might be enough to get it back picked up after toggling trackFork
     }
   }
 
@@ -42,7 +49,7 @@ void lewp() {
 
   // I think this works VVVVV this part turns SLEW on per-pot
   // NOPE GOT RID OF DIFFERENT SHIFT MODES shift mode one, adjust slew value between steps
-  if (shift) {                                             // Every Loop. if shift key is pressed?
+  if (shift == true) {                                     // Every Loop. if shift key is pressed?
     for (byte i = 0; i < 8; i++) {                         // run around the circle of pots WHILE SHIFT is being held
       if (((oldPotsValue[i] >> 6) != (RTPots[i] >> 6))) {  // the >> 6 introduces a 64-value buffer zone for jitter
         potNeedCatch[i] = true;                            // it's true. We're all looking for whoever is responsible for this
@@ -122,12 +129,17 @@ void lewp() {
   if (clockPotPickedUp == false || envPotPickedUp == false) analogReads();
   if (millis() - aTimer > 3) {                  // run it 330 times per second
     analogReads();                              // analog reads all 12 analog pin inputs
-    writeLEDs();                                // runs the "write LEDs" subroutine
     aTimer = millis();                          // reset the timer
     glide();                                    // run the glide part
     targetCV = circlePots[currentStep & 0x07];  //Nope, do NOT divide by 4, already done in analogReads() DUH
-    writeDAC(currentCV);                        // so we can write it to the DAC
-  }                                             // this code works great!
+    if (doubleClick == true) {                  // watch for doubleclick
+      currentCV = circlePots[shiftStep];        // keep value on the step it's on!
+      for (byte i = 0; i < 8; i++) {
+      }
+    }
+    writeLEDs();          // runs the "write LEDs" subroutine
+    writeDAC(currentCV);  // so we can write it to the DAC
+  }                       // this code works great!
 
   envPressed = !(PORTB.IN & (1 << 2));                       // is true while button pressed
   if (envPressed != oldEnvPressed) {                         // here's how we choose the parameter of the ADSR
@@ -412,7 +424,6 @@ void lewp() {
             case 1:                // whole notes - pure red
               ppqnPerStep = 96;    //
               targetHue[0] = 0;    // this is red
-              ;                    // deep red
               break;               //
             case 2:                // half notes - light blue
               ppqnPerStep = 48;    // 48, half-notes
@@ -441,7 +452,7 @@ void lewp() {
               targetHue[0] = 68;   // pure yellow
               break;               //
             case 8:                // sixteenth notes - pink
-              ppqnPerStep = 6;     // sixteenth notes!!! Hammer me with some of those 909CHHs
+              ppqnPerStep = 6;     // sixteenth notes!!! Hammer me with some of those 909CHHs 6
               targetHue[0] = 220;  // pink
               break;               // whew, all done
           }
@@ -462,24 +473,27 @@ void lewp() {
         targetSat[i] = 255;                      // saturation
         targetVal[i] = 150;                      // value
       }                                          // end the active step LED
-    } else {                                     // okay these are the non-active step LEDs
-      targetHue[i] = cirLEDs[i - 4];             // hue
+    } else {                                     // no, the LED doesn't need to flash, it just needs to be bright
+      targetHue[i] = cirLEDs[i - 4];             // hue                                                        // okay these are the non-active step LEDs
       targetSat[i] = 255;                        // saturation
       targetVal[i] = 15;                         // value so dim!!!
     }
   }
 
-  if (clockTicks > 0) {                                     // clockTick handler, happens once per Pulse (per quarter note)
-    cli();                                                  // clear interrupts,
-    clockTicks--;                                           // minus one from clockTicks variable, it'll zoom through until it's zero? Why isn't it just = 0? I DON'T REMEMBER
-    sei();                                                  // set interrupts again
-    ppqnCounter++;                                          // adds 1 to the value of ppqnCounter
-    CFC++;                                                  // CFC equals clock flash counter haha -- this is just for the clock LED to go brighter and dimmer
-    if (CFC > 23) CFC = 0;                                  // reset CFC
-    if (ppqnCounter >= ppqnPerStep) {                       // has the PPQN threshold been reached?
-      ppqnCounter = 0;                                      // if so, reset to zero!
-      if (shiftTracker == 0) PORTA.OUTSET = (1 << 6);       // if mode one, the light turns on for just this PULSE (PQN)
-      else if (shiftTracker == 2) PORTA.OUTCLR = (1 << 6);  // if mode three, the light turns OFF for this pulse
+  if (clockTicks > 0) {      // clockTick handler, happens once per Pulse (per quarter note)
+    cli();                   // clear interrupts,
+    clockTicks--;            // minus one from clockTicks variable, it'll zoom through until it's zero? Why isn't it just = 0? I DON'T REMEMBER
+    sei();                   // set interrupts again
+    if (extClock == true) {  // hmm, there was an external clock!!!!
+      // extClock = false;                                     // reset the external count tracker
+      TCB0.CTRLA |= TCB_ENABLE_bm;                     // start five internal subdivisions
+    } else if (shift == true) extClock = false;        // okay something else? To restart the internal clock???
+    ppqnCounter++;                                     // adds 1 to the value of ppqnCounter
+    CFC++;                                             // CFC equals clock flash counter haha -- this is just for the clock LED to go brighter and dimmer
+    if (CFC > 23) CFC = 0;                             // reset CFC
+    if (ppqnCounter >= ppqnPerStep) {                  // has the PPQN threshold been reached?
+      ppqnCounter = 0;                                 // if so, reset to zero!
+      if (shiftTracker == 0) PORTA.OUTSET = (1 << 6);  // if mode one, the light turns on for just this PULSE (PQN)
 
       /*this part runs once per thing... the circle pots advance every time this runs*/
       modeHandling();
@@ -503,17 +517,19 @@ void lewp() {
         recordBOC = recordSteps;
         recordSteps = 0;
       }
-    } else {  // the tracks have been FORKED!!!!
-      // if (recordSteps >= recordBOC) {                                  // we're only doing this when
-      //   recordSteps = 0;                                               // recorded loop Beginning of Cycle
-      // } else if (recordSteps > 1536) recordSteps = 0;                  // overflow protection
+    } else {                        // the tracks have been FORKED!!!!
       targetHue[3] = (arPD7 >> 3);  // tracks with knob position
       targetSat[3] = 255;           // also, gesture record!!!!
-      // gestureRecord();                                                                  // run the gestureRecord() part? Looks for gates and CVs
+      gestureRecord();
       if (ppqnCounter < (ppqnPerStep >> 1)) {                                           // on the way up, brighter <-- this part just makes the envPot "breathe" red
         targetVal[3] = map(ppqnCounter, 0, (ppqnPerStep >> 1), 0, 255);                 // maps to full bright
       } else targetVal[3] = map(ppqnCounter, (ppqnPerStep >> 1), ppqnPerStep, 255, 0);  // full bright to zero
-      // ^^^ this part runs just fine
+                                                                                        // ^^^ this part runs just fine
+
+
+
+
+
       writePWM(recorded[recordSteps] & 0x03FF);  // plays back the recorded CV with the writePWM() function
       if ((recorded[recordSteps] >> 15) & 1) PORTF.OUTSET = (1 << 5);
       else PORTF.OUTCLR = (1 << 5);  // gate out is zero
@@ -522,22 +538,7 @@ void lewp() {
       else if (recordSteps > 1563) recordSteps = 0;
     }
     TCA0.SPLIT.HCMP2 = envelopeValue;
-
-
-
-    // CFC++;                                                  // CFC equals clock flash counter haha -- this is just for the clock LED to go brighter and dimmer
-    // if (CFC > 23) CFC = 0;                                  // reset CFC
-    // if (ppqnCounter >= ppqnPerStep) {                       // has the PPQN threshold been reached?
-    //   ppqnCounter = 0;                                      // if so, reset to zero!
-    //   if (shiftTracker == 0) PORTA.OUTSET = (1 << 6);       // if mode one, the light turns on for just this PULSE (PQN)
-    //   else if (shiftTracker == 2) PORTA.OUTCLR = (1 << 6);  // if mode three, the light turns OFF for this pulse
-
-    //   /*this part runs once per thing... the circle pots advance every time this runs*/
-    //   modeHandling();
-    // } else {                                                                                   // this next part is just here to turn off (or go on/off 50% duty cycle) the shift LED
-    //   if (shiftTracker == 0) PORTA.OUTCLR = (1 << 6);                                          // flash ON!
-    //   else if (shiftTracker == 2) PORTA.OUTSET = (1 << 6);                                     // flash off (mode 3 might disappear)
-    // }                                                                                          // but the on/off still hasn't happened?
+    // but the on/off still hasn't happened?
     if (shiftTracker == 1) {                                                                   // oh, here's mode 2
       (ppqnCounter < (ppqnPerStep >> 1)) ? PORTA.OUTSET = (1 << 6) : PORTA.OUTCLR = (1 << 6);  // ternary function ON or OFF
     }
