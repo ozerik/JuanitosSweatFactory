@@ -480,14 +480,18 @@ void lewp() {
     }
   }
 
-  if (clockTicks > 0) {      // clockTick handler, happens once per Pulse (per quarter note)
-    cli();                   // clear interrupts,
-    clockTicks--;            // minus one from clockTicks variable, it'll zoom through until it's zero? Why isn't it just = 0? I DON'T REMEMBER
-    sei();                   // set interrupts again
-    if (extClock == true) {  // hmm, there was an external clock!!!!
-      // extClock = false;                                     // reset the external count tracker
-      TCB0.CTRLA |= TCB_ENABLE_bm;                     // start five internal subdivisions
-    } else if (shift == true) extClock = false;        // okay something else? To restart the internal clock???
+  if (clockTicks > 0) {  // clockTick handler, happens once per Pulse (per quarter note)
+    cli();               // clear interrupts,
+    clockTicks--;        // minus one from clockTicks variable, it'll zoom through until it's zero? Why isn't it just = 0? I DON'T REMEMBER
+    sei();               // set interrupts again
+    if (extClock == true && shift == true) {
+      extClock = false;
+      // TCB0.CCMP = 100000;
+      }
+    // if (extClock == true) {  // hmm, there was an external clock!!!!
+    // extClock = false;                                     // reset the external count tracker
+    // TCB0.CTRLA |= TCB_ENABLE_bm;                     // start five internal subdivisions
+    // } else if (shift == true) extClock = false;        // okay something else? To restart the internal clock???
     ppqnCounter++;                                     // adds 1 to the value of ppqnCounter
     CFC++;                                             // CFC equals clock flash counter haha -- this is just for the clock LED to go brighter and dimmer
     if (CFC > 23) CFC = 0;                             // reset CFC
@@ -517,10 +521,10 @@ void lewp() {
         recordBOC = recordSteps;
         recordSteps = 0;
       }
-    } else {                        // the tracks have been FORKED!!!!
-      targetHue[3] = (arPD7 >> 3);  // tracks with knob position
-      targetSat[3] = 255;           // also, gesture record!!!!
-      gestureRecord();
+    } else {                                                                            // the tracks have been FORKED!!!!
+      targetHue[3] = (arPD7 >> 3);                                                      // tracks with knob position
+      targetSat[3] = 255;                                                               // also, gesture record!!!!
+      gestureRecord();                                                                  // run that gesture record funtion! It puts the fun into nevermind
       if (ppqnCounter < (ppqnPerStep >> 1)) {                                           // on the way up, brighter <-- this part just makes the envPot "breathe" red
         targetVal[3] = map(ppqnCounter, 0, (ppqnPerStep >> 1), 0, 255);                 // maps to full bright
       } else targetVal[3] = map(ppqnCounter, (ppqnPerStep >> 1), ppqnPerStep, 255, 0);  // full bright to zero
@@ -543,6 +547,16 @@ void lewp() {
       (ppqnCounter < (ppqnPerStep >> 1)) ? PORTA.OUTSET = (1 << 6) : PORTA.OUTCLR = (1 << 6);  // ternary function ON or OFF
     }
   }
+
+
+  // if external clock stops for more than 1.5x the last known period, freeze
+  if (extClock && (micros() - lastExtClock > lastExtPeriod * 3 / 2)) {
+    TCB0.CTRLA &= ~TCB_ENABLE_bm;  // stop subdivisions
+    firstClock = true;             // reset for when clock restarts
+  }
+
+
+
 
   loopStart = false;
 

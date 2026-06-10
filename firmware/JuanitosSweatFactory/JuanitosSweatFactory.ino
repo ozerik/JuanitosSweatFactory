@@ -87,14 +87,14 @@ bool envPotPickedUp = false;     // for the envelope pot
 int Ediff;                       // difference for the envelope pot pickup
 
 /* here's the variables we'll use for the clock*/
-volatile byte clockTicks = 0;  // this is for the main timer
-byte ppqnCounter;              // pulse per quarter note, MIDI uses 24
-byte ppqnPerStep = 24;         // MIDI uses this, so you can get 8ths or 16ths by dividing by 2 or 4
-int currentStep;               // keeps track of what step the sequencer is on
-byte numSteps = 8;             // basic circle sequence, a nice default, but can be RADICALLY changed :D
-unsigned long stepFlash;       // timer for white flash on step change
-unsigned long pot1Flash;       // for flashing the clock pot
-bool doStepSelection = false;  // this says HEY METAMODE KNOB EQUALS STEP SELECTOR NOW
+volatile byte clockTicks = 0;    // this is for the main timer
+volatile byte ppqnCounter;       // pulse per quarter note, MIDI uses 24
+volatile byte ppqnPerStep = 24;  // MIDI uses this, so you can get 8ths or 16ths by dividing by 2 or 4
+int currentStep;                 // keeps track of what step the sequencer is on
+byte numSteps = 8;               // basic circle sequence, a nice default, but can be RADICALLY changed :D
+unsigned long stepFlash;         // timer for white flash on step change
+unsigned long pot1Flash;         // for flashing the clock pot
+bool doStepSelection = false;    // this says HEY METAMODE KNOB EQUALS STEP SELECTOR NOW
 
 /*Modes and Sequence Stuff*/
 
@@ -143,6 +143,8 @@ volatile bool run = true;              // stops internal clock when external clo
 unsigned long doubleClickTimer;        // times a double-click of shift button for HOLD and ENVELOPE (whee)
 bool doubleClick;                      // tracks the doubleClick state
 byte shiftStep;                        // for when doubleShift is active
+
+unsigned long lastExtPeriod;  // the previous period of time to get sent to the internal clock timer? I think?
 
 
 void setup() {
@@ -248,46 +250,51 @@ void setupClock() {
   TCB0.INTCTRL = TCB_CAPT_bm;                      // enabling the interrupt
                                                    // we're gonna enable *just* the "enable" bit here, to enable TCB0
   TCB0.CTRLA |= TCB_ENABLE_bm;                     // _bm stands for bit mask. The |= just writes that one bit, leaving the rest of the byte alone
-  sei();                                           /* "sei" stands for Set Interrupts. The old "enableInterrupts()" is not a part of DXCore, so gotta use this instead
+  sei();                                           /* "sei" stands for Set Interrupts. The old "enableInterrupts()" is not a part of DxCore, so gotta use this instead
   the converse is cli() which replaces "disableInterrupts()" and means "Clear Interrupts". So far, the interrupt just writes one boolean value
   so I don't know if we'll need to disable interrupts aka cli();*/
 }
-/* okay here's the internal timer Interrupt Service Routine */
-ISR(TCB0_INT_vect) {                 // INTERNAL CLOCK!!! Runs the in-between steps while extClock == true
-  TCB0.INTFLAGS = TCB_CAPT_bm;       // gotta clear the interrupt as soon as the interrupt fires!
-  if (extClock == true) {            // external mode! Only fire 5 or 23 times (for 16ths or 24PPQN)
-    internalPulseCount++;            // still gotta count up while extClock is happening
-    if (internalPulseCount < 5) {    // when external clock is here, do only five timer pulses
-      clockTicks++;                  // weird, this timer-based ISR just does this flag that the loop looks for as fast as the loop runs
-      extClock = false;              // stop after the 5th internal pulse???
-      run = false;                   // and keep it stopped???? Gotta set the timer somewhere too.
-    } else {                         // time to stop the timer pulses...
-      TCB0.CTRLA &= ~TCB_ENABLE_bm;  // ... which is what this does
-    }                                //
-  } else {                           // this happens when extClock == false    used to be else if (run == true)
-    clockTicks++;                    // count and count, just like regular
+
+
+ISR(PORTD_PORT_vect) {                                              // this is the external clock Interrupt SErvice Routine
+  PORTD.INTFLAGS = PIN0_bm;                                         // reset that bad mamma ISR flag for real
+  // extClock = true;                                                  // it's true. The extClock is happning
+  unsigned long now = micros();                                     // RIGHT NOW is when it's happening
+  if (firstClock == true) {                                         // first clock?
+    firstClock = false;                                             // if "yes" then all subsequent clocks will be NO
+    lastExtClock = now;                                             // the lastExtClock was now. This many microseconds
+    clockTicks++;                                                   // count this pulse
+    return;                                                         // bam, we did it everybody, get out of this ISR before all the clumsy math
+  }                                                                 // 
+  unsigned long period = now - lastExtClock;                        // period? Right now minus however long ago lastExtClock was recorded
+  lastExtClock = now;                                               // save that lastExtClock
+  lastExtPeriod = period;                                           // jokes about menstruation are never funny.
+  internalPulseCount = 0;                                           // reset subdivision counter
+  TCB0.CTRLA &= ~TCB_ENABLE_bm;                                     // disable timer for this next part
+  TCB0.CNT = 0;                                                     // timer B0 value to zero
+  TCB0.CCMP = (uint16_t)(((uint64_t)23437 * period) / 12000000UL) -1 ;  // This math supposedly divides period by 12, and then turns it into a CCMP for the timer
+  TCB0.CTRLA |= TCB_ENABLE_bm;                                      // start timer again for playing the next 11 clockTicks
+  clockTicks++;                                                     // this pulse is subdivision 1 of 12
+}
+
+ISR(TCB0_INT_vect) {            // internal CLOCK timer
+  TCB0.INTFLAGS = TCB_CAPT_bm;  // clear interrupt flag of course
+  if (extClock == true) {       // this part never seems to run!!!! SSDJFPOIJWVE
+    internalPulseCount++;
+    if (internalPulseCount <= 12) {  // fire 11 times, external is 12th
+      clockTicks++;
+    } else {
+      TCB0.CTRLA &= ~TCB_ENABLE_bm;  // stop, wait for next external pulse
+    }
+  } else {
+    clockTicks++;  // internal mode, fire forever
   }
 }
 
-ISR(PORTD_PORT_vect) {           // this is the external clock ISR, ONLY happens when a clock comes in
-  PORTD.INTFLAGS = PIN0_bm;      // clearing the interrupt flag so it doesn't panic-run-AS-FAST-AS-POSSSSSSS
-  unsigned long now = micros();  // what time is it? BE PRECISE!!!
-  extClock = true;               // turns this variable on once per "firstClock"
 
-  if (firstClock == true) {  // firstClock?
-    firstClock = false;      // like it does here
-    lastExtClock = now;      // it's now again for the first time
-    clockTicks++;            // do the clock ticks advance but return; the next line to skip the long division
-    return;
-  } else clockTicks++;  // first pulse
 
-  unsigned long period = now - lastExtClock;
-  lastExtClock = now;
-  TCB0.CCMP = (uint16_t)(((uint64_t)23437 * period) / 6000000UL);  // hmm, will this work? * period) / 6000000UL);
-  internalPulseCount = 0;                                          // reset subdivision
-  TCB0.CNT = 0;
-  TCB0.CTRLA |= TCB_ENABLE_bm;  // enables the timer for the 5 times it goes
-}
+
+
 
 void loop() {
   lewp();

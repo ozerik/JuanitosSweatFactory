@@ -8,11 +8,11 @@ void analogReads() {
   RTPots[6] = (analogRead(PIN_PE2) >> 2);
   RTPots[7] = (analogRead(PIN_PE5) >> 2);
   // topRowPots[0] = analogRead(PIN_PD0);               // CV jack top left, clock input mostly
-  topRowPots[1] = analogRead(PIN_PD1);               // top row pots without switches under them
-  topRowPots[2] = analogRead(PIN_PD2);               // top row pots without switches under them
+  topRowPots[1] = analogRead(PIN_PD1);  // top row pots without switches under them
+  topRowPots[2] = analogRead(PIN_PD2);  // top row pots without switches under them
   // if (record == false) arPD3 = analogRead(PIN_PD3);  // CV jack top right, only does analogReads while being a gesture recorder
-  arPE7 = analogRead(PIN_PE7);                       // clock pot, high res
-  arPD7 = analogRead(PIN_PD7);                       // envelope pot, high res
+  arPE7 = analogRead(PIN_PE7);  // clock pot, high res
+  arPD7 = analogRead(PIN_PD7);  // envelope pot, high res
 
   // okay here's where we check the pots against if they're picked up, and if they are, record new ACTUAL values
   for (byte i = 0; i < 8; i++) {
@@ -90,7 +90,7 @@ void analogReads() {
       }
       targetHue[2] = metaMode << 5;               // zero through 255
       targetSat[2] = (metaMode & 1) ? 250 : 255;  // a ternary function, the very first one I ever wrote! Is metaMode value even or odd? saturation numbers
-      targetVal[2] = (metaMode & 1) ? 35 : 180;   // another ternary function what the
+      targetVal[2] = (metaMode & 1) ? 35 : 180;   // another ternary function??
       if (metaMode == 7) {                        // oops, the pot is where there's no motion
         targetSat[2] = 0;                         // when the thing just sits in one spot, make the LED dim and white
         targetVal[2] = 30;
@@ -116,10 +116,10 @@ void analogReads() {
       targetSat[2] = 252;                         // just a bit less saturated than full
       targetVal[2] = (metaMode & 1) ? 100 : 255;  // another ternary function. Flips from brighter and dimmer
     }
-    if (doStepSelection) {                                 // this part lets you choose which step pot is current, and you can tune them this way
-      currentStep = map(topRowPots[2], 0, 4095, 5, 12);    // 5 to 12 what the???
-      if (currentStep > 7) currentStep = currentStep - 8;  // see, the pointer of the metaMode pot points sorta in the direction of the current pot
-      targetHue[2] = targetHue[currentStep + 4];           // yeah, gotta do math because currentPot needs to roll over
+    if (doStepSelection) {                                                 // this part lets you choose which step pot is current, and you can tune them this way
+      currentStep = constrain(map(topRowPots[2], 0, 4095, 5, 13), 5, 12);  // 5 to 12 what the???
+      if (currentStep > 7) currentStep = currentStep - 8;                  // see, the pointer of the metaMode pot points sorta in the direction of the current pot
+      targetHue[2] = targetHue[currentStep + 4];                           // yeah, gotta do math because currentPot needs to roll over
       // writeDAC(circlePots[currentStep & 0x07]);            // draw the LED color without latency (200Hz I guess)
     }
   }
