@@ -17,8 +17,4 @@ void glide() {
       currentCV = map(elapsed, 0, duration, currentCV, targetCV);  // do this math, adding or subtracting to get to the next CV value
     }
   }
-
-
-
-
 }

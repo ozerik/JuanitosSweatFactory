@@ -13,22 +13,23 @@ void lewp() {
       if (millis() - doubleClickTimer < 400) {         // looks for a quick double click
         doubleClick = true;                            // shiftShift means YES, it's being held!
         shiftStep = currentStep;                       // just for doubleClick mode :D
-
-      }                                   // that's all
-      doubleClickTimer = millis();        // timer for is this a doubleclick?
-      for (byte i = 0; i < 8; i++) {      // a for loop to....
-        potNeedCatch[i] = false;          // hmm, maybe this is the name of the variable I used for this
-        oldPotsValue[i] = circlePots[i];  // record the current pots into this value
-      }                                   // 0 to 1024, by the way
-                                          // and t his next part just just once per shift button RELEASED
-    } else {                              // this code below here only happens when the shift key is RELEASED!!!! So clever
-      doubleClick = false;                // no longer holding the shift button
-
+      }                                                // that's all
+      doubleClickTimer = millis();                     // timer for is this a doubleclick?
+      for (byte i = 0; i < 8; i++) {                   // a for loop to....
+        potNeedCatch[i] = false;                       // hmm, maybe this is the name of the variable I used for this
+        oldPotsValue[i] = circlePots[i];               // record the current pots into this value
+      }                                                // 0 to 1024, by the way
+                                                       // and t his next part just just once per shift button RELEASED
+      if (firstClock == false) {                       // and if shift is true???
+        extClock = false;                              // says "HEY NO MORE EXTERNAL CLOCKIN PLEASE"
+        firstClock = true;                             // and lets the next clock impulse be "first" for calculation purposes
+        TCB0.CTRLA |= TCB_ENABLE_bm;                   // start timer again for normal internal clock mode
+      }
+    } else {                // this code below here only happens when the shift key is RELEASED!!!! So clever
+      doubleClick = false;  // no longer holding the shift button
       // if I can think of anything to do when the shift key is released, I should put it here
     }
   }
-
-
   if (shift) {                                    // EVERY every lewp()
     if ((oldEnvPotValue >> 7) != (arPD7 >> 7)) {  // envPot changed, 128 values either direction
       if (oldEnvPotValue < arPD7) {               // the pot was turned UP
@@ -39,13 +40,6 @@ void lewp() {
       envPotPickedUp = false;                     // omg this might be enough to get it back picked up after toggling trackFork
     }
   }
-
-
-
-
-
-
-
 
   // I think this works VVVVV this part turns SLEW on per-pot
   // NOPE GOT RID OF DIFFERENT SHIFT MODES shift mode one, adjust slew value between steps
@@ -66,6 +60,22 @@ void lewp() {
         slewValue[i] = 0;
       }
     }
+
+
+
+
+
+
+
+
+    // todo this part is NO GOOD because it interrupts the normal extClock playback, fix it somehow later
+    // if (micros() - extNowReal > 0xFFFFF) {
+    // if (firstClock == false) {  // and if shift is true???
+    //   extClock = false;             // says "HEY NO MORE EXTERNAL CLOCKIN PLEASE"
+    //   firstClock = true;            // and lets the next clock impulse be "first" for calculation purposes
+    //   TCB0.CTRLA |= TCB_ENABLE_bm;  // start timer again for normal internal clock mode
+    // }
+    // }
   } else {
     for (byte i = 0; i < 8; i++) {
       if (potNeedCatch[i]) {                      // this part is to re-catch the circle pots to take effect again
@@ -89,21 +99,6 @@ void lewp() {
   }
 
   // I think this part ^^^^ works now?
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   for (byte i = 0; i < 8; i++) {          // here's the part where the circlePots get to flash. These numbers are different -- the total flash time
     if (millis() - CPotTimer[i] < 100) {  // is 1/10 second, not a quarter second
@@ -280,11 +275,6 @@ void lewp() {
   } else LEDEnvTracker = 0;  // resets the LED envelope thing for future envelope shows
 
 
-
-
-
-
-
   static byte attackStartValue;                  // for when the voltage isn't at zero when the envelope starts
   static byte releaseStartValue;                 // for when the voltage isn't at "sustain" value when release begins
   static bool lastGS = false;                    // stands for last Gate State. It's the variable that tracks what the last run-through value of the gate was
@@ -352,8 +342,6 @@ void lewp() {
   if (playEnvTracker == 4) envelopeValue = sustain;
   if (playEnvTracker == 0) envelopeValue = 0;
 
-
-
   bool clockPressed = !(PORTB.IN & (1 << 1));  // will happen when clock-pot button is pressed.
   if (clockPressed) {                          // whoah, clock pot button is being pressed
     if (clockPotPickedUp == true) {            // runs the first time through!
@@ -399,7 +387,7 @@ void lewp() {
 
   for (byte i = 0; i < ledCount; i++) {                            // calculate all the LED parameter values
     if (i == 0) {                                                  // top LEFT LED handler!!! CLOCK LED
-      if (clockPotPickedUp) {                                      // HEY! Is the pot positioned where it needs to be? Yes??? DO NORMAL STUFF
+      if (clockPotPickedUp == true) {                              // HEY! Is the pot positioned where it needs to be? Yes??? DO NORMAL STUFF
         if (millis() - pot1Flash < 200) {                          // these lines
           if (millis() - pot1Flash > 50) targetVal[0] = 0;         // are what make the pots
           if (millis() - pot1Flash > 100) targetVal[0] = 255;      // flash when they're
@@ -408,7 +396,7 @@ void lewp() {
           targetSat[0] = 255;                                      // fully saturated
           targetVal[0] = 150;                                      // medium bright
           if (abs(arPE7 - oldClockPotValue) > hysteresisWindow) {  // let's ONLY change values if we really meant to
-            byte newDivider = map(arPE7, 0, 4095, 0, 9);           // new divider,
+            byte newDivider = map(arPE7, 0, 4095, 0, 9);           // new divider, this is the ppqn divider is internal clock mode
             if (newDivider != oldClockDivider) {                   // whoah, we moved the pot far enough
               oldClockDivider = newDivider;                        // to change the divider for real
               clockDivider = newDivider;                           // here's where that's done
@@ -416,46 +404,73 @@ void lewp() {
             }                                                      // definitely gonna do this for the other four top pots
           }
 
-          switch (clockDivider) {  // each of the 8 values gets its own special color
-            case 0:                // two whole notes, cool green
-              ppqnPerStep = 192;   // slowwww
-              targetHue[0] = 95;   // bright red
-              break;               // break! Stop doing this
-            case 1:                // whole notes - pure red
-              ppqnPerStep = 96;    //
-              targetHue[0] = 0;    // this is red
-              break;               //
-            case 2:                // half notes - light blue
-              ppqnPerStep = 48;    // 48, half-notes
-              targetHue[0] = 156;  // light blue
-              break;               //
-            case 3:                // triplet quarters - yellow
-              ppqnPerStep = 32;    // triplet quarters. Also called dotted quarter notes?
-              targetHue[0] = 64;   // yellow
-              break;               // we were on a break, said Ross (worst character ever)
-            case 4:                // quarter notes - white, the "home" division
-              ppqnPerStep = 24;    // ONE QUARTER PORTION
-              targetHue[0] = 255;  // speaking of David Schwimmer: white
-              targetSat[0] = 0;    // white as can be
-              targetVal[0] = 255;  // not an ounce of color in that man
-              break;               // I could never understand what Rachel saw in that guy
-            case 5:                // triplet eighths - orange
-              ppqnPerStep = 20;    // I mean, at least Ross wasn't orange
-              targetHue[0] = 4;    // OMB
-              break;               // break
-            case 6:                // eighth notes - sorta teal
-              ppqnPerStep = 9;     // nine
-              targetHue[0] = 100;  // teal
-              break;               //
-            case 7:                // triplet sixteenths - yellow
-              ppqnPerStep = 8;     // pretty quick
-              targetHue[0] = 68;   // pure yellow
-              break;               //
-            case 8:                // sixteenth notes - pink
-              ppqnPerStep = 6;     // sixteenth notes!!! Hammer me with some of those 909CHHs 6
-              targetHue[0] = 220;  // pink
-              break;               // whew, all done
-          }
+
+
+
+
+
+          if (extClock == true) {           // THIS IS NEW -- if the external clock has fired AT ALL (and hasn't been reset) the clock pot behavior changes,adn does this
+            if (clockDivider < 3) {         // is clockDivider 0, 1, or 2?
+              extClockMode = 0;             // this means "watch for 24 external clocks. increment recordSteps for each one, fire modeHandling() every 24"
+              targetHue[0] = 95;            // sorta aqua
+            } else if (clockDivider > 5) {  // is clockDivider 6, 7, or 8? (or 9, but that's edge-case)
+              extClockMode = 2;             // this means "divide extClock intervals (periods haha) into 24, increment recordSTeps on each extClock, fire modehandling() every 24"
+              targetHue[0] = 220;           // pink
+            } else {                        // huh, clockDivider must be 3, 4, or 5. Got it.
+              extClockMode = 1;             // this is 16ths, "divide extClock into 12, run modeHandling() every 2 extClock, increment recordSTeps every 12th???""
+              targetSat[0] = 0;             // white
+              targetVal[0] = 255;           // bright
+            }
+
+
+
+
+
+
+
+
+
+
+          } else switch (clockDivider) {  // each of the 8 values gets its own special color
+              case 0:                     // two whole notes, cool green
+                ppqnPerStep = 192;        // slowwww
+                targetHue[0] = 95;        // sorta aqua
+                break;                    // break! Stop doing this
+              case 1:                     // whole notes - pure red
+                ppqnPerStep = 96;         //
+                targetHue[0] = 0;         // this is red
+                break;                    //
+              case 2:                     // half notes - light blue
+                ppqnPerStep = 48;         // 48, half-notes
+                targetHue[0] = 156;       // light blue
+                break;                    //
+              case 3:                     // triplet quarters - yellow
+                ppqnPerStep = 32;         // triplet quarters. Also called dotted quarter notes?
+                targetHue[0] = 64;        // yellow
+                break;                    // we were on a break, said Ross (worst character ever)
+              case 4:                     // quarter notes - white, the "home" division
+                ppqnPerStep = 24;         // ONE QUARTER PORTION
+                targetHue[0] = 255;       // speaking of David Schwimmer: white
+                targetSat[0] = 0;         // white as can be
+                targetVal[0] = 255;       // not an ounce of color in that man
+                break;                    // I could never understand what Rachel saw in that guy
+              case 5:                     // triplet eighths - orange
+                ppqnPerStep = 20;         // I mean, at least Ross wasn't orange
+                targetHue[0] = 4;         // OMB
+                break;                    // break
+              case 6:                     // eighth notes - sorta teal
+                ppqnPerStep = 9;          // nine
+                targetHue[0] = 100;       // teal
+                break;                    //
+              case 7:                     // triplet sixteenths - yellow
+                ppqnPerStep = 8;          // pretty quick
+                targetHue[0] = 68;        // pure yellow
+                break;                    //
+              case 8:                     // sixteenth notes - pink
+                ppqnPerStep = 6;          // sixteenth notes!!! Hammer me with some of those 909CHHs 6
+                targetHue[0] = 220;       // pink
+                break;                    // whew, all done
+            }
         }
         if (CFC > 12) targetVal[0] = targetVal[0] >> 2;
       }
@@ -480,35 +495,65 @@ void lewp() {
     }
   }
 
-  if (clockTicks > 0) {  // clockTick handler, happens once per Pulse (per quarter note)
-    cli();               // clear interrupts,
-    clockTicks--;        // minus one from clockTicks variable, it'll zoom through until it's zero? Why isn't it just = 0? I DON'T REMEMBER
-    sei();               // set interrupts again
-    if (extClock == true && shift == true) {
-      extClock = false;
-      // TCB0.CCMP = 100000;
+
+  while (clockTicks > 0) {  // clockTick handler, happens once per Pulse (per quarter note)
+    cli();                  // clear interrupts,
+    clockTicks--;           // minus one from clockTicks variable, it'll zoom through until it's zero? Why isn't it just = 0? I DON'T REMEMBER
+    sei();                  // set interrupts again
+
+    if (extClock == true) {     // mmkayyy gotta subdivide these thingies
+      if (extClockMode == 0) {  // just watches for 24 extClock pusles.
+        recordSteps++;          // each extClock pusle is a new recordSteps
+        tickTrack++;            // this counts up to 24!
+        if (tickTrack > 24) {   // did we do 24 of these extClocks?
+          tickTrack = 0;        // yes? then let's reset
+          modeHandling();       // and do All The Things
+        }
+      } else if (extClockMode == 1) {         // this is 16th note mode, 12 recordSteps between clock inputs
+        if (extClockFirst == true) {          // and one modeHandlign() per 2 clock inputs
+          extNow = micros();                  // here's the first extNow value, to be divided by 12
+          extClockFirst = false;              // and don't keep doing this? I think?
+        } else {                              // okay do THIS instead, so this isn't the first extClock
+          extPeriod = micros() - extNow;      // which is, calculate the time since "extNow" before, right?
+          extDividedPeriod = extPeriod / 12;  // make a divided period to run in the main lewp()
+          extNow = micros();                  // wait, what? This part runs ONCE PER extClock pulse? Is this right???
+          static bool doHandling = false;     // tracks if we're gonna do the thing or NOT do the thing
+          if (doHandling == true) {           // shall we do the thing?
+            modeHandling();                   // um sure, mode handling dot comzky
+          }                                   //
+          doHandling = !doHandling;           // tells doHandling to flip flop to the other bool state
+        }                                     //
+      } else {                                // the only alternative left is extClockMode 2, which is, each extClock do modeHandling BUT increment recordSteps 24 times between
+        if (extClockFirst == true) {          // first time through this?
+          extNow = micros();                  // drop a temporal reference point
+          extClockFirst = false;              // and don't do another one until after measuring the interval
+          modeHandling();                     // do the thing every time, including this one
+        } else {                              //
+          extPeriod = micros() - extNow;      // interval calculation
+          extDividedPeriod = extPeriod / 24;  // 24ths. This should be the magic opposite of mode 0, where each external clock gets divided into 24
+          extNow = micros();                  // good grief I'm so confused i THINK this will work but??????
+          modeHandling();                     // okay this kinda works, besides the recordSteps advance. Hmmmmmm
+        }
       }
-    // if (extClock == true) {  // hmm, there was an external clock!!!!
-    // extClock = false;                                     // reset the external count tracker
-    // TCB0.CTRLA |= TCB_ENABLE_bm;                     // start five internal subdivisions
-    // } else if (shift == true) extClock = false;        // okay something else? To restart the internal clock???
-    ppqnCounter++;                                     // adds 1 to the value of ppqnCounter
-    CFC++;                                             // CFC equals clock flash counter haha -- this is just for the clock LED to go brighter and dimmer
-    if (CFC > 23) CFC = 0;                             // reset CFC
-    if (ppqnCounter >= ppqnPerStep) {                  // has the PPQN threshold been reached?
-      ppqnCounter = 0;                                 // if so, reset to zero!
-      if (shiftTracker == 0) PORTA.OUTSET = (1 << 6);  // if mode one, the light turns on for just this PULSE (PQN)
 
-      /*this part runs once per thing... the circle pots advance every time this runs*/
-      modeHandling();
-    } else {                                                // this next part is just here to turn off (or go on/off 50% duty cycle) the shift LED
-      if (shiftTracker == 0) PORTA.OUTCLR = (1 << 6);       // flash ON!
-      else if (shiftTracker == 2) PORTA.OUTSET = (1 << 6);  // flash off (mode 3 might disappear)
+    } else {
+
+
+
+      ppqnCounter++;                                     // adds 1 to the value of ppqnCounter
+      recordSteps++;                                     // adds 1 to the value of recordSteps
+      if (ppqnCounter >= ppqnPerStep) {                  // has the PPQN threshold been reached?
+        ppqnCounter = 0;                                 // if so, reset to zero!
+        if (shiftTracker == 0) PORTA.OUTSET = (1 << 6);  // if mode one, the light turns on for just this PULSE (PQN)
+        /*this part runs once per thing... the circle pots advance every time this runs*/
+        modeHandling();
+      } else {                                                // this next part is just here to turn off (or go on/off 50% duty cycle) the shift LED
+        if (shiftTracker == 0) PORTA.OUTCLR = (1 << 6);       // flash ON!
+        else if (shiftTracker == 2) PORTA.OUTSET = (1 << 6);  // flash off (mode 3 might disappear)
+      }
     }
-    recordSteps++;  // adds 1 to the value of recordSteps
-
-
-
+    CFC++;                                                             // CFC equals clock flash counter haha -- this is just for the clock LED to go brighter and dimmer
+    if (CFC > 23) CFC = 0;                                             // reset CFC
     if (record == true) {                                              // well, record must equal equal true
       writePWM(currentCV);                                             // this is to the PWM pin HCMP0
       recorded[recordSteps] = (uint16_t)(gateForRecord << 15)          // gate, on or off, also empties all the binary values
@@ -517,29 +562,27 @@ void lewp() {
       else PORTF.OUTCLR = (1 << 5);                                    // gate out is zero
       recordedB[recordSteps] = envelopeValue;                          // quick records that envelope value into the recorded loop
       TCA0.SPLIT.HCMP1 = recordedB[recordSteps];                       // and right away plays that envelope back from the HCMP1 output
-      if (loopStart == true) {
-        recordBOC = recordSteps;
-        recordSteps = 0;
-      }
-    } else {                                                                            // the tracks have been FORKED!!!!
-      targetHue[3] = (arPD7 >> 3);                                                      // tracks with knob position
-      targetSat[3] = 255;                                                               // also, gesture record!!!!
-      gestureRecord();                                                                  // run that gesture record funtion! It puts the fun into nevermind
-      if (ppqnCounter < (ppqnPerStep >> 1)) {                                           // on the way up, brighter <-- this part just makes the envPot "breathe" red
+      // if (loopStart == true) {                                         // this part works during internal clocks,
+      //   recordBOC = recordSteps;                                       // but gets missed during external clocking????
+      //   recordSteps = 0;                                               // maybe something about loopStart isn't running? HHHHMMMMM
+      // }
+    } else {                        // the tracks have been FORKED!!!!
+      targetHue[3] = (arPD7 >> 3);  // tracks with knob position
+      targetSat[3] = 255;           // also, gesture record!!!!
+      gestureRecord();              // run that gesture record funtion! It puts the fun into nevermind
+      if (extClock == true) {
+        if (CFC < 12) targetVal[3] = map(CFC, 0, 12, 0, 255);
+        else targetVal[3] = map(CFC, 12, 24, 255, 0);
+      } else if (ppqnCounter < (ppqnPerStep >> 1)) {                                    // on the way up, brighter <-- this part just makes the envPot "breathe" red
         targetVal[3] = map(ppqnCounter, 0, (ppqnPerStep >> 1), 0, 255);                 // maps to full bright
       } else targetVal[3] = map(ppqnCounter, (ppqnPerStep >> 1), ppqnPerStep, 255, 0);  // full bright to zero
                                                                                         // ^^^ this part runs just fine
-
-
-
-
-
-      writePWM(recorded[recordSteps] & 0x03FF);  // plays back the recorded CV with the writePWM() function
+      writePWM(recorded[recordSteps] & 0x03FF);                                         // plays back the recorded CV with the writePWM() function
       if ((recorded[recordSteps] >> 15) & 1) PORTF.OUTSET = (1 << 5);
       else PORTF.OUTCLR = (1 << 5);  // gate out is zero
       TCA0.SPLIT.HCMP1 = recordedB[recordSteps];
       if (recordSteps >= recordBOC) recordSteps = 0;
-      else if (recordSteps > 1563) recordSteps = 0;
+      else if (recordSteps > 1535) recordSteps = 0;
     }
     TCA0.SPLIT.HCMP2 = envelopeValue;
     // but the on/off still hasn't happened?
@@ -549,11 +592,29 @@ void lewp() {
   }
 
 
-  // if external clock stops for more than 1.5x the last known period, freeze
-  if (extClock && (micros() - lastExtClock > lastExtPeriod * 3 / 2)) {
-    TCB0.CTRLA &= ~TCB_ENABLE_bm;  // stop subdivisions
-    firstClock = true;             // reset for when clock restarts
+
+  if (extClock == true) {     // recordStep timer advancer. Needs external clock to be true aannddd
+    if (extClockMode != 0) {  // needs extClockMode to be 1 or 2 (2 or 3, haha) because mode 0 (1) is just 24ppqn feeding the sequencer
+
+      if (micros() - extNowReal > extDividedPeriod) {  // ooh, maybe this can work for either extClockMode 1 or 2
+        extNowReal = micros();                         // because all it does is watch for the time to exceed extDividedPeriod, and doesn't care about other stuff
+        recordSteps++;                                 // and increments this variable for recording stuff whenever
+      }
+    }
   }
+  // if (micros() - extNow > extDividedPeriod) {  // has one twelfth (tickTotal-th?) of the period passed?
+  //   extNow = micros();                         // well then, make the new extNow equal micros()
+  //   clockTicks++;                              // and increment clockTicks because that's how everything EVERYTHING gets done
+  //   tickTrack++;                               // and increment tickTracker because that's how counting intervals works
+  //   if (tickTrack > tickTotal) {               // if there's enough?
+  //     tickTrack = 0;                           // reset. And alsooooo
+  //   }
+  // }
+  // if external clock stops for more than 1.5x the last known period, freeze
+  // if (extClock && (micros() - lastExtClock > lastExtPeriod * 3 / 2)) {
+  //   TCB0.CTRLA &= ~TCB_ENABLE_bm;  // stop timer!!!
+  //   firstClock = true;             // reset for when clock restarts
+  // }
 
 
 

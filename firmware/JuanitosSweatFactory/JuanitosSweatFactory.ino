@@ -135,8 +135,6 @@ byte tapCount;                         // counts taps in tapTempo()
 bool GS;                               // gate state! for recording the gate state
 int arPD3;                             // sure, why not, analogRead(PIN_PD3) is this value
 unsigned int BOCtrack;                 // maybe this will count how many ACTUAL pulses between clock resets???
-volatile bool extClock = false;        // flags that there's an external clock
-volatile unsigned long lastExtClock;   // time of the last external clock tick or pulse
 volatile byte internalPulseCount = 0;  // counts up to like 6 or 24 oor 12, depending on shift-clockPot setting?
 bool firstClock = true;                // watches for a first clock
 volatile bool run = true;              // stops internal clock when external clock exists
@@ -144,8 +142,19 @@ unsigned long doubleClickTimer;        // times a double-click of shift button f
 bool doubleClick;                      // tracks the doubleClick state
 byte shiftStep;                        // for when doubleShift is active
 
-unsigned long lastExtPeriod;  // the previous period of time to get sent to the internal clock timer? I think?
 
+
+volatile bool extClock = false;           // flags that there's an external clock
+volatile unsigned long lastExtClock;      // time of the last external clock tick or pulse
+unsigned long lastExtPeriod;              // the previous period of time to get sent to the internal clock timer? I think?
+volatile unsigned long extNow;            // the exact time the external clock came to the module
+volatile unsigned long extPeriod;         // the amount of time between last two external clocks
+volatile unsigned long extDividedPeriod;  // the amount of micros() we have to wait between clockTicks++
+byte tickTrack;                           // counter to see how many ticks have happened! It'll roll over at like 11 or something
+volatile byte tickTotal;                  // how many ticks between extClocks??????
+volatile byte extClockMode;               // um, this is for extClock, 24ppqn? 2 peaks per sequence advance? 1 peak per sequence advance?
+bool extClockFirst = true;                // this is for the main timer reads
+unsigned long extNowReal;                 // the variable the main lewp() uses to watch for when to do the recordSTeps++
 
 void setup() {
   /*DELAY to allow power supply caps to charge*/
@@ -179,11 +188,8 @@ void setup() {
   PORTD.PIN0CTRL = PORT_ISC_RISING_gc;  // interrupt on rising edge only
 
   // CHATGPT and Claude helped with this part. Thanks, robots
-
   PORTMUX.TCAROUTEA = PORTMUX_TCA0_PORTA_gc;
-
-  TCA0.SPLIT.CTRLA = 0;  // stop timer
-
+  TCA0.SPLIT.CTRLA = 0;                       // stop timer
   TCA0.SPLIT.CTRLB = TCA_SPLIT_HCMP0EN_bm     // PA3 = WO3 = H timer CMP0
                      | TCA_SPLIT_HCMP1EN_bm   // PA4 = WO4 = H timer CMP1
                      | TCA_SPLIT_HCMP2EN_bm;  // PA5 = WO5 = H timer CMP2
@@ -219,6 +225,7 @@ void setup() {
   // I guess DXCore has a bug where it writes analogReference(VDD) to the wrong register?
   setupClock();  // starting the clock in the setup routine
 }
+
 void setupClock() {
   /* we're gonna use the timer called TCB0 to run the sequence clock we're working with a variable PPQN (pulses per quarter note) to get different divisions
   of the clock that might be coming in from a MIDI device (24PPQN) or something else (4PPQN?)
@@ -256,43 +263,36 @@ void setupClock() {
 }
 
 
-ISR(PORTD_PORT_vect) {                                              // this is the external clock Interrupt SErvice Routine
-  PORTD.INTFLAGS = PIN0_bm;                                         // reset that bad mamma ISR flag for real
-  // extClock = true;                                                  // it's true. The extClock is happning
-  unsigned long now = micros();                                     // RIGHT NOW is when it's happening
-  if (firstClock == true) {                                         // first clock?
-    firstClock = false;                                             // if "yes" then all subsequent clocks will be NO
-    lastExtClock = now;                                             // the lastExtClock was now. This many microseconds
-    clockTicks++;                                                   // count this pulse
-    return;                                                         // bam, we did it everybody, get out of this ISR before all the clumsy math
-  }                                                                 // 
-  unsigned long period = now - lastExtClock;                        // period? Right now minus however long ago lastExtClock was recorded
-  lastExtClock = now;                                               // save that lastExtClock
-  lastExtPeriod = period;                                           // jokes about menstruation are never funny.
-  internalPulseCount = 0;                                           // reset subdivision counter
-  TCB0.CTRLA &= ~TCB_ENABLE_bm;                                     // disable timer for this next part
-  TCB0.CNT = 0;                                                     // timer B0 value to zero
-  TCB0.CCMP = (uint16_t)(((uint64_t)23437 * period) / 12000000UL) -1 ;  // This math supposedly divides period by 12, and then turns it into a CCMP for the timer
-  TCB0.CTRLA |= TCB_ENABLE_bm;                                      // start timer again for playing the next 11 clockTicks
-  clockTicks++;                                                     // this pulse is subdivision 1 of 12
-}
-
 ISR(TCB0_INT_vect) {            // internal CLOCK timer
   TCB0.INTFLAGS = TCB_CAPT_bm;  // clear interrupt flag of course
-  if (extClock == true) {       // this part never seems to run!!!! SSDJFPOIJWVE
-    internalPulseCount++;
-    if (internalPulseCount <= 12) {  // fire 11 times, external is 12th
-      clockTicks++;
-    } else {
-      TCB0.CTRLA &= ~TCB_ENABLE_bm;  // stop, wait for next external pulse
-    }
-  } else {
-    clockTicks++;  // internal mode, fire forever
-  }
+  clockTicks++;                 // internal mode, fire forever
 }
 
 
 
+ISR(PORTD_PORT_vect) {             // this is the external clock Interrupt SErvice Routine
+  PORTD.INTFLAGS = PIN0_bm;        // reset that bad mamma ISR flag for real
+  extClock = true;                 // it's true. The extClock is happning
+  if (firstClock == true) {        // first clock just dropped. DO SOMETHING
+    firstClock = false;            // set this to false do it doesn't run anymore
+    TCB0.CTRLA &= ~TCB_ENABLE_bm;  // and stop the internal timer
+  }                                //
+  clockTicks++;
+  // TCB0.CTRLA &= ~TCB_ENABLE_bm;              // so y'know what? Nobody needs you right now, TCB0.CTRLA (sorry) (oops, did this down thereVV)
+  // extNow = micros();                         // RIGHT NOW is when it's happening
+  // if (firstClock == true) {                  // first clock?
+  //   firstClock = false;                      // if "yes" then all subsequent clocks will be NO
+  //   lastExtClock = extNow;                   // the lastExtClock was now. This many microseconds
+  //   clockTicks++;                            // count this pulse
+  //   TCB0.CTRLA &= ~TCB_ENABLE_bm;            // stop timer!!! (right here)
+  //   return;                                  // bam, we did it everybody, get out of this ISR before all the clumsy math
+  // }                                          //
+  // extPeriod = extNow - lastExtClock;         // period? Right now minus however long ago lastExtClock was recorded
+  // lastExtClock = extNow;                     // save that lastExtClock jokes about menstruation are never funny.
+  // lastExtPeriod = extPeriod;                 // period.
+  // extDividedPeriod = extPeriod / tickTotal;  // okay is this gonna work, I do not know??? it's the 1/12th of the microseconds between the last two clocks
+  // clockTicks++;                              // tells the rest of the sketch THIS HAPPENED
+}
 
 
 

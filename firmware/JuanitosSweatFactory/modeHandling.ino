@@ -1,7 +1,5 @@
 void modeHandling() {  // runs when it's time to do the next step!
 
-
-
   static byte oldMode;
   if (mode == 0) {            // okay here's linear mode!!!!
     if (metaMode < 8) {       // 7 and below. 7 should just reset to 0 every time. 0 should go 7 steps backwards
@@ -543,7 +541,7 @@ void modeHandling() {  // runs when it's time to do the next step!
         if (patternCount > 63) patternCount = 0;
         break;
     }
-  } else if (mode == 3) { // MORE PATTERNS
+  } else if (mode == 3) {                           // MORE PATTERNS
     static byte patternCount;                       // variable for counting pattern
     static byte oldMetaMode;                        // keeps track of old meta mode
     if (metaMode != oldMetaMode) patternCount = 0;  // blank slate, clears pattern count in case the previous one and this one are'nt compatible
@@ -1072,8 +1070,14 @@ void modeHandling() {  // runs when it's time to do the next step!
     gateForRecord = false;
   }
 
-  PORTF.OUTSET = (1 << 2);    // turns the clock output signal HIGH
-  if (loopStart == true) {    // did the loop just start?
+
+  PORTF.OUTSET = (1 << 2);  // turns the clock output signal HIGH
+  // i moved this part here because maybe it works better?
+  if (loopStart == true) {  // did the loop just start?
+    if (record == true) {
+      recordBOC = recordSteps;  // but gets missed during external clocking????
+      recordSteps = 0;          // maybe something about loopStart isn't running? HHHHMMMMM
+    }
     PORTF.OUTSET = (1 << 3);  // turns the END/START OF LOOP signal HIGH
   }
   stepFlash = millis();  // Time flashes and dimming of the LEDs in the circle
