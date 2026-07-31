@@ -10,20 +10,20 @@ void lewp() {
     }                                                  // debounce done
                                                        // this next part runs just once per shift button press:
     if (shift) {                                       // ONCE PER PRESS!!! is the key pressed?
-      if (millis() - doubleClickTimer < 400) {         // looks for a quick double click
-        doubleClick = true;                            // shiftShift means YES, it's being held!
-        shiftStep = currentStep;                       // just for doubleClick mode :D
-      }                                                // that's all
-      doubleClickTimer = millis();                     // timer for is this a doubleclick?
-      for (byte i = 0; i < 8; i++) {                   // a for loop to....
-        potNeedCatch[i] = false;                       // hmm, maybe this is the name of the variable I used for this
-        oldPotsValue[i] = circlePots[i];               // record the current pots into this value
-      }                                                // 0 to 1024, by the way
-                                                       // and t his next part just just once per shift button RELEASED
-      if (firstClock == false) {                       // and if shift is true???
-        extClock = false;                              // says "HEY NO MORE EXTERNAL CLOCKIN PLEASE"
-        firstClock = true;                             // and lets the next clock impulse be "first" for calculation purposes
-        TCB0.CTRLA |= TCB_ENABLE_bm;                   // start timer again for normal internal clock mode
+      if (millis() - doubleClickTimer < 400) {  // looks for a quick double click
+        doubleClick = true;                     // shiftShift means YES, it's being held!
+        shiftStep = currentStep;                // just for doubleClick mode :D
+      }                                         // that's all
+      doubleClickTimer = millis();              // timer for is this a doubleclick?
+      for (byte i = 0; i < 8; i++) {            // a for loop to....
+        potNeedCatch[i] = false;                // hmm, maybe this is the name of the variable I used for this
+        oldPotsValue[i] = circlePots[i];        // record the current pots into this value
+      }                                         // 0 to 1024, by the way
+                                                // and t his next part just just once per shift button RELEASED
+      if (firstClock == false) {                // and if shift is true???
+        extClock = false;                       // says "HEY NO MORE EXTERNAL CLOCKIN PLEASE"
+        firstClock = true;                      // and lets the next clock impulse be "first" for calculation purposes
+        TCB0.CTRLA |= TCB_ENABLE_bm;            // start timer again for normal internal clock mode
       }
     } else {                // this code below here only happens when the shift key is RELEASED!!!! So clever
       doubleClick = false;  // no longer holding the shift button
@@ -136,8 +136,11 @@ void lewp() {
     writeDAC(currentCV);  // so we can write it to the DAC
   }                       // this code works great!
 
+
+
   envPressed = !(PORTB.IN & (1 << 2));                       // is true while button pressed
   if (envPressed != oldEnvPressed) {                         // here's how we choose the parameter of the ADSR
+  
     if (millis() - envPressedDebounce > debounce) {          // by pressing the button under the envelope pot
       envPressedDebounce = millis();                         // debounce variable wheee
       oldEnvPressed = envPressed;                            // checking to be sure we're not just saying "pressed NOT PRESSED pressed" etc super fast
@@ -336,7 +339,6 @@ void lewp() {
 
     envelopeValue = map(elapsed, 0, duration, sustain, 0);  // how long for the release? this might be so wrong
 
-    // analogWrite(PIN_PA5, envelopeValue);         // ugh, we shall see
     if (elapsed > duration) playEnvTracker = 0;  // back to "nothing is playing" not super necessary.
   }
   if (playEnvTracker == 4) envelopeValue = sustain;
@@ -540,16 +542,22 @@ void lewp() {
 
 
 
-      ppqnCounter++;                                     // adds 1 to the value of ppqnCounter
-      recordSteps++;                                     // adds 1 to the value of recordSteps
-      if (ppqnCounter >= ppqnPerStep) {                  // has the PPQN threshold been reached?
-        ppqnCounter = 0;                                 // if so, reset to zero!
-        if (shiftTracker == 0) PORTA.OUTSET = (1 << 6);  // if mode one, the light turns on for just this PULSE (PQN)
+      ppqnCounter++;                     // adds 1 to the value of ppqnCounter
+      recordSteps++;                     // adds 1 to the value of recordSteps
+      if (ppqnCounter >= ppqnPerStep) {  // has the PPQN threshold been reached?
+        ppqnCounter = 0;                 // if so, reset to zero!
+        // if (shiftTracker == 0) PORTA.OUTSET = (1 << 6);  // if mode one, the light turns on for just this PULSE (PQN)
+        if (shiftTracker == 0) {
+          targetHue[13] = 50;
+          targetSat[13] = 250;
+        }
+        targetVal[13] = 155;
         /*this part runs once per thing... the circle pots advance every time this runs*/
         modeHandling();
-      } else {                                                // this next part is just here to turn off (or go on/off 50% duty cycle) the shift LED
-        if (shiftTracker == 0) PORTA.OUTCLR = (1 << 6);       // flash ON!
-        else if (shiftTracker == 2) PORTA.OUTSET = (1 << 6);  // flash off (mode 3 might disappear)
+      } else {  // this next part is just here to turn off (or go on/off 50% duty cycle) the shift LED
+        // if (shiftTracker == 0) PORTA.OUTCLR = (1 << 6);       // flash ON!
+        // else if (shiftTracker == 2) PORTA.OUTSET = (1 << 6);  // flash off (mode 3 might disappear)
+        targetVal[13] = 0;  // shift key LED off
       }
     }
     CFC++;                                                             // CFC equals clock flash counter haha -- this is just for the clock LED to go brighter and dimmer
@@ -586,8 +594,9 @@ void lewp() {
     }
     TCA0.SPLIT.HCMP2 = envelopeValue;
     // but the on/off still hasn't happened?
-    if (shiftTracker == 1) {                                                                   // oh, here's mode 2
-      (ppqnCounter < (ppqnPerStep >> 1)) ? PORTA.OUTSET = (1 << 6) : PORTA.OUTCLR = (1 << 6);  // ternary function ON or OFF
+    if (shiftTracker == 1) {  // oh, here's mode 2
+      // (ppqnCounter < (ppqnPerStep >> 1)) ? PORTA.OUTSET = (1 << 6) : PORTA.OUTCLR = (1 << 6);  // ternary function ON or OFF
+      (ppqnCounter < (ppqnPerStep >> 1)) ? targetVal[13] = 155 : targetVal[13] = 0;  // ternary function to flash shift LED
     }
   }
 
@@ -602,20 +611,6 @@ void lewp() {
       }
     }
   }
-  // if (micros() - extNow > extDividedPeriod) {  // has one twelfth (tickTotal-th?) of the period passed?
-  //   extNow = micros();                         // well then, make the new extNow equal micros()
-  //   clockTicks++;                              // and increment clockTicks because that's how everything EVERYTHING gets done
-  //   tickTrack++;                               // and increment tickTracker because that's how counting intervals works
-  //   if (tickTrack > tickTotal) {               // if there's enough?
-  //     tickTrack = 0;                           // reset. And alsooooo
-  //   }
-  // }
-  // if external clock stops for more than 1.5x the last known period, freeze
-  // if (extClock && (micros() - lastExtClock > lastExtPeriod * 3 / 2)) {
-  //   TCB0.CTRLA &= ~TCB_ENABLE_bm;  // stop timer!!!
-  //   firstClock = true;             // reset for when clock restarts
-  // }
-
 
 
 

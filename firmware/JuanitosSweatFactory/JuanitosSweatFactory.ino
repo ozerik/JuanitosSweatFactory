@@ -1,5 +1,3 @@
-
-
 #include <APA102.h>
 #include <arduino.h>
 
@@ -7,7 +5,7 @@
 const byte dataPin = 17;             // the clock pin, PIN_PC1
 const byte clockPin = 16;            // the data pin, PIN_PC0
 APA102<dataPin, clockPin> ledStrip;  // the "object" of the LED array
-const byte ledCount = 12;            // how many LEDs are in this project?
+const byte ledCount = 13;            // how many LEDs are in this project?
 rgb_color colors[ledCount];          // here's where the color info is stored
 const byte brightness = 10;          // default brightness is 10, out of 31
 const byte jitterDefeater = 70;      // hysteresis conqueror -- how much the pot has to turn into the new value to count?
@@ -77,7 +75,6 @@ bool loopStart = false;            // tracker for the start of the loop. Just fo
 unsigned long envelopeTimer;       // times the timing-related parts of the envelope
 unsigned long LEDEnvelopeTimer;    // just for the LED part
 unsigned long pot3Flash;           // for flashing the envelope pot light
-unsigned int IGateLength[8];       // for the gates! Per pot
 
 /* variables for picking up pot turns */
 unsigned int lastClockPotValue;  // where the pot was when mode last changed
@@ -158,7 +155,7 @@ unsigned long extNowReal;                 // the variable the main lewp() uses t
 
 void setup() {
   /*DELAY to allow power supply caps to charge*/
-  delay(400);
+  delay(1500);  // caps charging *and* allowing UPDI to initialize if you wanna use Serial2 communications. Right after the code compiles, reset the module to flash
   /*INPUTS*/
   pinMode(PIN_PD4, INPUT);  // circlePot 1 (zero, don't forget it's address number zero in the array)
   pinMode(PIN_PD5, INPUT);  // circlePot 2 (these are the circlePot input pins) They default to INPUT,
@@ -176,14 +173,13 @@ void setup() {
   pinMode(PIN_PE7, INPUT);  // top row ACTUAL pot 1, the CV and pot are separate
   pinMode(PIN_PD7, INPUT);  // top row ACTUAL pot 4,
 
-  pinMode(PIN_PB1, INPUT_PULLUP);  // clicky button under pot 1
-  pinMode(PIN_PB2, INPUT_PULLUP);  // clicky button under pot 4
-  pinMode(PIN_PA7, INPUT_PULLUP);  // mechanical keyboard switch for SHIFT
+  pinMode(PIN_PB1, INPUT_PULLUP);                                                  // clicky button under pot 1
+  pinMode(PIN_PB2, INPUT_PULLUP);                                                  // clicky button under pot 4
+  pinMode(PIN_PA7, INPUT_PULLUP);                                                  // mechanical keyboard switch for SHIFT
+  while (digitalRead(PIN_PA7) == LOW) digitalWrite(PIN_PF2, (millis() >> 8) & 1);  // this is to prevent more BRICKINGS. Hold shift to pause everything so UPDI can initialize
+                                                                                   // OOOORRRRRRRR ^^^^^^^^^^ reset the module while holding shift, that'll pause the module so UPDI can initialize
 
   /*OUTPUTS*/
-  // pinMode(PIN_PD6, OUTPUT);  // main high-quality 10-bit analog out
-
-
   // HARDWARE INTERRUPT!!! This is for the clock input!
   PORTD.PIN0CTRL = PORT_ISC_RISING_gc;  // interrupt on rising edge only
 
@@ -215,15 +211,19 @@ void setup() {
                              // now the LED output for the shift key
   pinMode(PIN_PA6, OUTPUT);  // shift key LED
 
-  analogSampleDuration(4);   // gives the ADC caps a bit of extra time to load
-  analogReadResolution(12);  // the AVR128DB has 12 bit analog read resolution! That's 4096 values!!! May as well use it
+  ADC0.CTRLB = ADC_SAMPNUM_ACC16_gc;  // hardware-accumulate 16 samples
+  ADC0.SAMPCTRL = 16;  // longer sample window — pots are high-impedance sources, this matters more than people expect
+  // ADC0.CTRLA = ADC_ENABLE_bm | ADC_RESSEL_12BIT_gc;
+  analogReadResolution(12);           // the AVR128DB has 12 bit analog read resolution! That's 4096 values!!! May as well use it
 
 
   VREF.DAC0REF = 0x05;                        // writing to this register enables VDD voltage reference for the DAC
   DAC0.CTRLA = DAC_ENABLE_bm | DAC_OUTEN_bm;  // and this enables that DAC
   VREF.ADC0REF = VREF_REFSEL_VDD_gc;          // this WEIRD line selects VCC (5V) as the voltage reference for analog reads
   // I guess DXCore has a bug where it writes analogReference(VDD) to the wrong register?
-  setupClock();  // starting the clock in the setup routine
+  setupClock();         // starting the clock in the setup routine
+  Serial2.begin(9600);  //Enabling this requires reset-hold-shift routine to get the module to flash. Boo.
+  //
 }
 
 void setupClock() {
@@ -277,21 +277,8 @@ ISR(PORTD_PORT_vect) {             // this is the external clock Interrupt SErvi
     firstClock = false;            // set this to false do it doesn't run anymore
     TCB0.CTRLA &= ~TCB_ENABLE_bm;  // and stop the internal timer
   }                                //
+
   clockTicks++;
-  // TCB0.CTRLA &= ~TCB_ENABLE_bm;              // so y'know what? Nobody needs you right now, TCB0.CTRLA (sorry) (oops, did this down thereVV)
-  // extNow = micros();                         // RIGHT NOW is when it's happening
-  // if (firstClock == true) {                  // first clock?
-  //   firstClock = false;                      // if "yes" then all subsequent clocks will be NO
-  //   lastExtClock = extNow;                   // the lastExtClock was now. This many microseconds
-  //   clockTicks++;                            // count this pulse
-  //   TCB0.CTRLA &= ~TCB_ENABLE_bm;            // stop timer!!! (right here)
-  //   return;                                  // bam, we did it everybody, get out of this ISR before all the clumsy math
-  // }                                          //
-  // extPeriod = extNow - lastExtClock;         // period? Right now minus however long ago lastExtClock was recorded
-  // lastExtClock = extNow;                     // save that lastExtClock jokes about menstruation are never funny.
-  // lastExtPeriod = extPeriod;                 // period.
-  // extDividedPeriod = extPeriod / tickTotal;  // okay is this gonna work, I do not know??? it's the 1/12th of the microseconds between the last two clocks
-  // clockTicks++;                              // tells the rest of the sketch THIS HAPPENED
 }
 
 
@@ -312,7 +299,7 @@ void loop() {
   // delay(500);
   // TCA0.SPLIT.HCMP1 = 64;   // quarter
   // delay(500);
-  // TCA0.SPLIT.HCMP1 = 0;    // zero
+  // TCA0.SPLIT.HCMP1 = 0;    // zero n
   // delay(500);
   // TCA0.SPLIT.HCMP2 = 255;  // full
   // delay(500);
