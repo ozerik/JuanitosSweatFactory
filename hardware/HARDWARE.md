@@ -103,4 +103,4 @@ It has never been required, in my case, to use a reset button. It **is** useful 
 
 As I write this, my code has two ways to stop serial communications:
 1. reset or power-cycle the module while holding the shift key. Hold it until the the upload initializes
-2. while the module is running, simulatneously turn pot 1 all the way down, and press shift and button-under-knob-4. This executes `Serial2.end();` and also completely hangs the module for some reason. But that's okay, you're going to flash it anyway.
+2. while the module is running, simulatneously press shift, switch-under-knob-1, and switch-under-knob-4. This executes `Serial2.end();` and also completely hangs the module for some reason. But that's okay, you're going to flash it anyway.

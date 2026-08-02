@@ -1058,9 +1058,7 @@ void modeHandling() {  // runs when it's time to do the next step!
   // targetCV = circlePots[currentStep & 0x07];  //Nope, do NOT divide by 4, already done in analogReads() DUH
   glideTimer = millis();  // this is for glide timer over in the loop
 
-  // if (slewValue[currentStep & 0x07] == 0) {    // checks to see if we need to glide?
-  //   writeDAC(circlePots[currentStep & 0x07]);  // why the hex code? I can't remember... pretty sure that's bitmasking all but the lowest 4 bits out
-  // }
+
 
   if (circlePots[currentStep] > 0) {
     PORTF.OUTSET = (1 << 4);

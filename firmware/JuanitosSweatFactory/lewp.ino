@@ -10,20 +10,20 @@ void lewp() {
     }                                                  // debounce done
                                                        // this next part runs just once per shift button press:
     if (shift) {                                       // ONCE PER PRESS!!! is the key pressed?
-      if (millis() - doubleClickTimer < 400) {  // looks for a quick double click
-        doubleClick = true;                     // shiftShift means YES, it's being held!
-        shiftStep = currentStep;                // just for doubleClick mode :D
-      }                                         // that's all
-      doubleClickTimer = millis();              // timer for is this a doubleclick?
-      for (byte i = 0; i < 8; i++) {            // a for loop to....
-        potNeedCatch[i] = false;                // hmm, maybe this is the name of the variable I used for this
-        oldPotsValue[i] = circlePots[i];        // record the current pots into this value
-      }                                         // 0 to 1024, by the way
-                                                // and t his next part just just once per shift button RELEASED
-      if (firstClock == false) {                // and if shift is true???
-        extClock = false;                       // says "HEY NO MORE EXTERNAL CLOCKIN PLEASE"
-        firstClock = true;                      // and lets the next clock impulse be "first" for calculation purposes
-        TCB0.CTRLA |= TCB_ENABLE_bm;            // start timer again for normal internal clock mode
+      if (millis() - doubleClickTimer < 400) {         // looks for a quick double click
+        doubleClick = true;                            // shiftShift means YES, it's being held!
+        shiftStep = currentStep;                       // just for doubleClick mode :D
+      }                                                // that's all
+      doubleClickTimer = millis();                     // timer for is this a doubleclick?
+      for (byte i = 0; i < 8; i++) {                   // a for loop to....
+        potNeedCatch[i] = false;                       // hmm, maybe this is the name of the variable I used for this
+        oldPotsValue[i] = circlePots[i];               // record the current pots into this value
+      }                                                // 0 to 1024, by the way
+                                                       // and t his next part just just once per shift button RELEASED
+      if (firstClock == false) {                       // and if shift is true???
+        extClock = false;                              // says "HEY NO MORE EXTERNAL CLOCKIN PLEASE"
+        firstClock = true;                             // and lets the next clock impulse be "first" for calculation purposes
+        TCB0.CTRLA |= TCB_ENABLE_bm;                   // start timer again for normal internal clock mode
       }
     } else {                // this code below here only happens when the shift key is RELEASED!!!! So clever
       doubleClick = false;  // no longer holding the shift button
@@ -138,9 +138,9 @@ void lewp() {
 
 
 
-  envPressed = !(PORTB.IN & (1 << 2));                       // is true while button pressed
-  if (envPressed != oldEnvPressed) {                         // here's how we choose the parameter of the ADSR
-  
+  envPressed = !(PORTB.IN & (1 << 2));  // is true while button pressed
+  if (envPressed != oldEnvPressed) {    // here's how we choose the parameter of the ADSR
+
     if (millis() - envPressedDebounce > debounce) {          // by pressing the button under the envelope pot
       envPressedDebounce = millis();                         // debounce variable wheee
       oldEnvPressed = envPressed;                            // checking to be sure we're not just saying "pressed NOT PRESSED pressed" etc super fast
@@ -362,9 +362,10 @@ void lewp() {
       TCB0.CCMP = newCCMP;                       // set that CCMP what is that, clock/compare match point? Something like that
       parOneCV = map(arPE7, 0, 4096, 0, 185);    // clock-style hue follows pot only when it's a clock control
       targetHue[0] = parOneCV;                   // hue follows pot while button held
-      targetSat[0] = 255;                        // saturated
-      targetVal[0] = 100;                        // kinda middlebright
-    } else targetSat[0] = 0;                     // if we're doing taptempo, make the pot WHITE
+      Serial2.println(targetHue[0]);
+      targetSat[0] = 255;     // saturated
+      targetVal[0] = 100;     // kinda middlebright
+    } else targetSat[0] = 0;  // if we're doing taptempo, make the pot WHITE
     if (TCB0.CNT > newCCMP) TCB0.CNT = 0;
   } else if (clockPotPickedUp == false) {            // only do this if the clockPot isn't PickedUp
     int diff = lastClockPotValue - arPE7;            // what's the difference?
@@ -476,10 +477,12 @@ void lewp() {
         }
         if (CFC > 12) targetVal[0] = targetVal[0] >> 2;
       }
+
     } else if (i == 3) /*envelope pot*/ {        // top RIGHT led, Envelope Mode
                                                  // do nothing because it's handled elsewhere
     } else if (i < 4) {                          // the middle two pots on the top row
                                                  // value
+    } else if (i == 12) /* shift LED */ {        // do nothing because it's handled elsewhereeee???
     } else if ((currentStep & 0x07) == i - 4) {  // whoah, this is the active step!!!
       if (millis() - stepFlash < 50) {           // does the LED need to flash?
         targetHue[i] = 255;                      // hue
@@ -496,7 +499,6 @@ void lewp() {
       targetVal[i] = 15;                         // value so dim!!!
     }
   }
-
 
   while (clockTicks > 0) {  // clockTick handler, happens once per Pulse (per quarter note)
     cli();                  // clear interrupts,
@@ -548,16 +550,17 @@ void lewp() {
         ppqnCounter = 0;                 // if so, reset to zero!
         // if (shiftTracker == 0) PORTA.OUTSET = (1 << 6);  // if mode one, the light turns on for just this PULSE (PQN)
         if (shiftTracker == 0) {
-          targetHue[13] = 50;
-          targetSat[13] = 250;
         }
-        targetVal[13] = 155;
+        targetHue[12] = 0;
+        targetSat[12] = 255;
+        targetVal[12] = 255;
+        
         /*this part runs once per thing... the circle pots advance every time this runs*/
         modeHandling();
       } else {  // this next part is just here to turn off (or go on/off 50% duty cycle) the shift LED
         // if (shiftTracker == 0) PORTA.OUTCLR = (1 << 6);       // flash ON!
         // else if (shiftTracker == 2) PORTA.OUTSET = (1 << 6);  // flash off (mode 3 might disappear)
-        targetVal[13] = 0;  // shift key LED off
+        targetVal[12] = 0;  // shift key LED off
       }
     }
     CFC++;                                                             // CFC equals clock flash counter haha -- this is just for the clock LED to go brighter and dimmer

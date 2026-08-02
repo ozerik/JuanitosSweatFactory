@@ -32,11 +32,9 @@ unsigned int parOneCV;        // these are the CV inputs for the top left and ri
 unsigned int parFourCV;       // parameters. par stands for parameter
 int arPE7;                    // holds the  high-res value of CLOCK pot
 int arPD7;                    // holds the high-res value of ENVELOPE pot
-byte parOneLED;               // the low resolution color control for knob 1
-byte parFourLED;              // low res color for knob 4
-byte targetHue[12];           // holds the values for LED hues
-byte targetSat[12];           // saturation values
-byte targetVal[12];           // holds brightness values
+byte targetHue[13];           // holds the values for LED hues
+byte targetSat[13];           // saturation values
+byte targetVal[13];           // holds brightness values
 bool potFourButton;           // button under top right pot
 bool shiftButton;             // mechanical keyswitch in the middle, for SHIFT
 byte lastModeState;           // for managing clock button mode
@@ -284,29 +282,7 @@ ISR(PORTD_PORT_vect) {             // this is the external clock Interrupt SErvi
 
 
 void loop() {
+  
   lewp();
-  // TCA0.SPLIT.HCMP0 = 255;  // full
-  // delay(500);
-  // TCA0.SPLIT.HCMP0 = 128;  // half
-  // delay(500);
-  // TCA0.SPLIT.HCMP0 = 64;   // quarter
-  // delay(500);
-  // TCA0.SPLIT.HCMP0 = 0;    // zero
-  // delay(500);
-  // TCA0.SPLIT.HCMP1 = 255;  // full
-  // delay(500);
-  // TCA0.SPLIT.HCMP1 = 128;  // half
-  // delay(500);
-  // TCA0.SPLIT.HCMP1 = 64;   // quarter
-  // delay(500);
-  // TCA0.SPLIT.HCMP1 = 0;    // zero n
-  // delay(500);
-  // TCA0.SPLIT.HCMP2 = 255;  // full
-  // delay(500);
-  // TCA0.SPLIT.HCMP2 = 128;  // half
-  // delay(500);
-  // TCA0.SPLIT.HCMP2 = 64;   // quarter
-  // delay(500);
-  // TCA0.SPLIT.HCMP2 = 0;    // zero
-  // delay(500);
+
 }

@@ -66,11 +66,8 @@ void writePWM(uint16_t value10bit) {                                    // crams
 void writeDAC(unsigned int value) {  // this is so silly -- the data needs to be written twice, one as a byte, and once with just two bits
   DAC0.DATAL = value & 0x03;         // write lower 2 bits
   DAC0.DATAH = (value >> 2) & 0xFF;  // write upper 8 bits and latches the output
-  Serial2.println(value);
+  // Serial2.println(value);
 }  // don't mess with this function, it'll break EVERYTHING
-
-
-
 
 
 
@@ -79,14 +76,8 @@ void writeLEDs() {                                           // sets all the LED
   for (byte i = 0; i < ledCount; i++) {                      // in this for loop
     setLEDHSV(i, targetHue[i], targetSat[i], targetVal[i]);  // plug the values in!
   }                                                          // and thennnnnn
-  ledStrip.write(colors, ledCount, 31);                      // actually send the data to all the APA102 LEDs
+  ledStrip.write(colors, ledCount, 20);                      // actually send the data to all the APA102 LEDs
 }
-
-
-
-
-
-
 
 void setLEDHSV(byte index, byte h, byte s, byte v) {
   if (h >= 128 && h <= 213) v = min((byte)255, (unsigned int)v * 3 / 2);  // boost blue region 50%

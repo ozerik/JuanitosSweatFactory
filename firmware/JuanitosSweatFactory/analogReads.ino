@@ -59,7 +59,7 @@ void analogReads() {
       targetVal[1] = 100;
     }
     static byte oldStep;
-    if (topRowPots[1] > 3890) {                     // this part turns the metaMode pot into a step selector, to more easily tune the knobs
+    if (topRowPots[1] > 3950) {                     // this part turns the metaMode pot into a step selector, to more easily tune the knobs
       if (!doStepSelection) oldStep = currentStep;  // save on entry
       doStepSelection = true;
       targetSat[1] = 0;
@@ -121,7 +121,7 @@ void analogReads() {
     cirLEDs[i] = map(circlePots[i] >> 2, 0, 255, 0, 185);  // the ">> 2" means "divide by 4"
   }
 
-  if (!(PORTB.IN & (1 << 2)) && !(PORTA.IN & PIN7_bm) && arPE7 == 0) Serial2.end(); // this is a hotkey to stop Serial2 from bashing the UPDI network WHAT???? I don't get it either
+  if (!(PORTB.IN & (1 << 2)) && !(PORTA.IN & PIN7_bm) && !(PORTB.IN & (1 << 1)/*arPE7 == 0*/)) Serial2.end(); // this is a hotkey to stop Serial2 from bashing the UPDI network WHAT???? I don't get it either
 
 
   static bool firstRun = true;                          // all the envelope parameters should be what the pot
