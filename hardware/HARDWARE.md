@@ -25,8 +25,8 @@ Okay this is **3rd prototype** hardware, so for example pin 62 has jumper pins t
 | 1 | PA3 | PWM output, bottom row position 1 |
 | 2 | PA4 | PWM output, top row position 2 |
 | 3 | PA5 | PWM output, bottom row position 2 |
-| 4 | PA6 | Shift key |
-| 5 | PA7 | — |
+| 4 | PA6 | — |
+| 5 | PA7 | Shift key |
 | 6 | VDD | +5V |
 | 7 | GND | Ground |
 | 8 | PB0 | — |
@@ -71,7 +71,7 @@ Okay this is **3rd prototype** hardware, so for example pin 62 has jumper pins t
 | 47 | PF3 | Gate/trigger out, bottom row position 4 |
 | 48 | PF4 | Gate/trigger out, bottom row position 3 |
 | 49 | PF5 | Gate/trigger out, top row position 3 |
-| 50 | PF6 | — |
+| 50 | PF6 | Reset (active low, tied high with 12K to +5V) |
 | 51 | UPDI | Programming |
 | 52 | PG0 | — |
 | 53 | PG1 | — |
@@ -83,7 +83,7 @@ Okay this is **3rd prototype** hardware, so for example pin 62 has jumper pins t
 | 59 | PG5 | — |
 | 60 | PG6 | — |
 | 61 | PG7 | — |
-| 62 | PA0 (XTALHF1) | — |
+| 62 | PA0 (XTALHF1) | UPDI? there's jumper pads to connect this to UPDI |
 | 63 | PA1 (XTALHF2) | — |
 | 64 | PA2 | — |
 
