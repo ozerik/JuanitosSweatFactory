@@ -1,5 +1,14 @@
 void modeHandling() {  // runs when it's time to do the next step!
 
+  if (shiftMode == 0) {
+    targetHue[12] = 0;    // red
+    targetSat[12] = 255;  // bright red
+    targetVal[12] = 255;
+  } else if (shiftMode == 1) {
+    targetHue[12] = 160;  // blue
+    targetVal[12] = 255;
+  }
+
   static byte oldMode;
   if (mode == 0) {            // okay here's linear mode!!!!
     if (metaMode < 8) {       // 7 and below. 7 should just reset to 0 every time. 0 should go 7 steps backwards
@@ -1067,7 +1076,6 @@ void modeHandling() {  // runs when it's time to do the next step!
     PORTF.OUTCLR = (1 << 4);
     gateForRecord = false;
   }
-
 
   PORTF.OUTSET = (1 << 2);  // turns the clock output signal HIGH
   // i moved this part here because maybe it works better?

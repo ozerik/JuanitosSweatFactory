@@ -11,21 +11,23 @@ void lewp() {
                                                        // this next part runs just once per shift button press:
     if (shift) {                                       // ONCE PER PRESS!!! is the key pressed?
       if (millis() - doubleClickTimer < 400) {         // looks for a quick double click
-        doubleClick = true;                            // shiftShift means YES, it's being held!
-        shiftStep = currentStep;                       // just for doubleClick mode :D
-      }                                                // that's all
-      doubleClickTimer = millis();                     // timer for is this a doubleclick?
-      for (byte i = 0; i < 8; i++) {                   // a for loop to....
-        potNeedCatch[i] = false;                       // hmm, maybe this is the name of the variable I used for this
-        oldPotsValue[i] = circlePots[i];               // record the current pots into this value
-      }                                                // 0 to 1024, by the way
-                                                       // and t his next part just just once per shift button RELEASED
-      if (firstClock == false) {                       // and if shift is true???
-        extClock = false;                              // says "HEY NO MORE EXTERNAL CLOCKIN PLEASE"
-        firstClock = true;                             // and lets the next clock impulse be "first" for calculation purposes
-        TCB0.CTRLA |= TCB_ENABLE_bm;                   // start timer again for normal internal clock mode
+        doubleClick = true;                            // okay I guess double-click happened
+        shiftMode++;
+        if (shiftMode > 1) shiftMode = 0;
+        shiftStep = currentStep;          // just for doubleClick mode :D
+      }                                   // that's all
+      doubleClickTimer = millis();        // timer for is this a doubleclick?
+      for (byte i = 0; i < 8; i++) {      // a for loop to....
+        potNeedCatch[i] = false;          // hmm, maybe this is the name of the variable I used for this
+        oldPotsValue[i] = circlePots[i];  // record the current pots into this value
+      }                                   // 0 to 1024, by the way
+                                          // and t his next part just just once per shift button RELEASED
+      if (firstClock == false) {          // and if shift is true???
+        extClock = false;                 // says "HEY NO MORE EXTERNAL CLOCKIN PLEASE"
+        firstClock = true;                // and lets the next clock impulse be "first" for calculation purposes
+        TCB0.CTRLA |= TCB_ENABLE_bm;      // start timer again for normal internal clock mode
       }
-    } else {                // this code below here only happens when the shift key is RELEASED!!!! So clever
+    } else {                // this code below here only happens when the shift key is RELEASED!!!! So clever :rolleyes:
       doubleClick = false;  // no longer holding the shift button
       // if I can think of anything to do when the shift key is released, I should put it here
     }
@@ -43,12 +45,12 @@ void lewp() {
 
   // I think this works VVVVV this part turns SLEW on per-pot
   // NOPE GOT RID OF DIFFERENT SHIFT MODES shift mode one, adjust slew value between steps
-  if (shift == true) {                                     // Every Loop. if shift key is pressed?
-    for (byte i = 0; i < 8; i++) {                         // run around the circle of pots WHILE SHIFT is being held
-      if (((oldPotsValue[i] >> 6) != (RTPots[i] >> 6))) {  // the >> 6 introduces a 64-value buffer zone for jitter
-        potNeedCatch[i] = true;                            // it's true. We're all looking for whoever is responsible for this
-        if (RTPots[i] > oldPotsValue[i]) {                 // this checks if WHOEVER IT WAS turned the knob up?
-          slewValue[i] = constrain(((RTPots[i] - oldPotsValue[i]) >> 6), 0, 2);
+  if (shift == true) {                                         // Every Loop. if shift key is pressed?
+    for (byte i = 0; i < 8; i++) {                             // run around the circle of pots WHILE SHIFT is being held
+      if (((oldPotsValue[i] >> 6) != (circlePots[i] >> 6))) {  // the >> 6 introduces a 64-value buffer zone for jitter
+        potNeedCatch[i] = true;                                // it's true. We're all looking for whoever is responsible for this
+        if (circlePots[i] > oldPotsValue[i]) {                 // this checks if WHOEVER IT WAS turned the knob up?
+          slewValue[i] = constrain(((circlePots[i] - oldPotsValue[i]) >> 6), 0, 2);
         } else if (slewValue[i] > 0) {  // slew needs to be turned down
           slewValue[i] = 0;             // makes slew just be zero
         }
@@ -78,8 +80,8 @@ void lewp() {
     // }
   } else {
     for (byte i = 0; i < 8; i++) {
-      if (potNeedCatch[i]) {                      // this part is to re-catch the circle pots to take effect again
-        int cDiff = oldPotsValue[i] - RTPots[i];  // this part
+      if (potNeedCatch[i]) {                          // this part is to re-catch the circle pots to take effect again
+        int cDiff = oldPotsValue[i] - TcirclePots[i];  // this part
         if (cDiff > 10) {
           targetHue[i + 4] = 160;
           targetSat[i + 4] = 255;
@@ -122,19 +124,39 @@ void lewp() {
 
   // analog read, write LEDs, and glide subroutines. Run 330 times per second or whatever
   if (clockPotPickedUp == false || envPotPickedUp == false) analogReads();
-  if (millis() - aTimer > 3) {                  // run it 330 times per second
+  if (millis() - aTimer > 3) {  // run it 330 times per second
+
+
+
+
     analogReads();                              // analog reads all 12 analog pin inputs
     aTimer = millis();                          // reset the timer
-    glide();                                    // run the glide part
     targetCV = circlePots[currentStep & 0x07];  //Nope, do NOT divide by 4, already done in analogReads() DUH
+    glide();                                    // run the glide part
     if (doubleClick == true) {                  // watch for doubleclick
-      currentCV = circlePots[shiftStep];        // keep value on the step it's on!
+      // currentCV = circlePots[shiftStep];        // keep value on the step it's on!
       for (byte i = 0; i < 8; i++) {
       }
     }
-    writeLEDs();          // runs the "write LEDs" subroutine
-    writeDAC(currentCV);  // so we can write it to the DAC
-  }                       // this code works great!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    writeLEDs();                                     // runs the "write LEDs" subroutine
+    rangedCV = map(currentCV, 0, 1023, 0, CVRange);  // rangify that currentCV
+    writeDAC(rangedCV);                              // maps currentCV to range, and then writes it to the DAC value
+  }                                                  // this code works great!
 
 
 
@@ -362,10 +384,9 @@ void lewp() {
       TCB0.CCMP = newCCMP;                       // set that CCMP what is that, clock/compare match point? Something like that
       parOneCV = map(arPE7, 0, 4096, 0, 185);    // clock-style hue follows pot only when it's a clock control
       targetHue[0] = parOneCV;                   // hue follows pot while button held
-      Serial2.println(targetHue[0]);
-      targetSat[0] = 255;     // saturated
-      targetVal[0] = 100;     // kinda middlebright
-    } else targetSat[0] = 0;  // if we're doing taptempo, make the pot WHITE
+      targetSat[0] = 255;                        // saturated
+      targetVal[0] = 100;                        // kinda middlebright
+    } else targetSat[0] = 0;                     // if we're doing taptempo, make the pot WHITE
     if (TCB0.CNT > newCCMP) TCB0.CNT = 0;
   } else if (clockPotPickedUp == false) {            // only do this if the clockPot isn't PickedUp
     int diff = lastClockPotValue - arPE7;            // what's the difference?
@@ -542,33 +563,22 @@ void lewp() {
 
     } else {
 
-
-
       ppqnCounter++;                     // adds 1 to the value of ppqnCounter
       recordSteps++;                     // adds 1 to the value of recordSteps
       if (ppqnCounter >= ppqnPerStep) {  // has the PPQN threshold been reached?
         ppqnCounter = 0;                 // if so, reset to zero!
-        // if (shiftTracker == 0) PORTA.OUTSET = (1 << 6);  // if mode one, the light turns on for just this PULSE (PQN)
-        if (shiftTracker == 0) {
-        }
-        targetHue[12] = 0;
-        targetSat[12] = 255;
-        targetVal[12] = 255;
-        
         /*this part runs once per thing... the circle pots advance every time this runs*/
         modeHandling();
-      } else {  // this next part is just here to turn off (or go on/off 50% duty cycle) the shift LED
-        // if (shiftTracker == 0) PORTA.OUTCLR = (1 << 6);       // flash ON!
-        // else if (shiftTracker == 2) PORTA.OUTSET = (1 << 6);  // flash off (mode 3 might disappear)
-        targetVal[12] = 0;  // shift key LED off
+      } else {
+        if (ppqnCounter > 3) targetVal[12] = 0;  // shift key LED off
       }
     }
     CFC++;                                                             // CFC equals clock flash counter haha -- this is just for the clock LED to go brighter and dimmer
     if (CFC > 23) CFC = 0;                                             // reset CFC
     if (record == true) {                                              // well, record must equal equal true
-      writePWM(currentCV);                                             // this is to the PWM pin HCMP0
+      writePWM(rangedCV);                                              // locks this value in
       recorded[recordSteps] = (uint16_t)(gateForRecord << 15)          // gate, on or off, also empties all the binary values
-                              | (currentCV & 0x03FF);                  // the CV, 10 bits, 1024 values
+                              | (rangedCV & 0x03FF);                   // the CV, 10 bits, 1024 values
       if ((recorded[recordSteps] >> 15) & 1) PORTF.OUTSET = (1 << 5);  // gate outs! This can be from recorded, or from gestureRecorder
       else PORTF.OUTCLR = (1 << 5);                                    // gate out is zero
       recordedB[recordSteps] = envelopeValue;                          // quick records that envelope value into the recorded loop
@@ -597,12 +607,10 @@ void lewp() {
     }
     TCA0.SPLIT.HCMP2 = envelopeValue;
     // but the on/off still hasn't happened?
-    if (shiftTracker == 1) {  // oh, here's mode 2
-      // (ppqnCounter < (ppqnPerStep >> 1)) ? PORTA.OUTSET = (1 << 6) : PORTA.OUTCLR = (1 << 6);  // ternary function ON or OFF
-      (ppqnCounter < (ppqnPerStep >> 1)) ? targetVal[13] = 155 : targetVal[13] = 0;  // ternary function to flash shift LED
+    if (shiftMode == 1) {
     }
   }
-
+  // writePWM(currentCV);  // this is to the PWM pin HCMP0
 
 
   if (extClock == true) {     // recordStep timer advancer. Needs external clock to be true aannddd

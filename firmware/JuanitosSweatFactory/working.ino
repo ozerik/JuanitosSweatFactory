@@ -22,6 +22,7 @@ void gestureRecord() {
 }
 
 void tapTempo() {
+  Serial2.println(":ajdak;");
   static unsigned long lastTap = 0;                                             // when did the last tap happen?
   static unsigned long intervals[8];                                            // stores all the times between taps
   static byte tapIndex = 0;                                                     // which value in that array? This one!
@@ -53,20 +54,26 @@ void tapTempo() {
 }
 
 
-void writePWM(uint16_t value10bit) {                                    // crams a 10-bit value into an 8-bit PWM pin
-  static byte dither = 0;                                               // dither value
-  byte high = value10bit >> 2;                                          // main value to send
-  if (high < 255) {                                                     // checks for room? 255 + 1 = zerooooo what in the
-    dither += value10bit & 0x03;                                        // grab those two least significant bits
-    TCA0.SPLIT.HCMP0 = (dither >= 4) ? (dither -= 4, high + 1) : high;  // Is dither greater than 3? if so, get rid of 4/4ths of a whole value out of "dither" and add that 4/4ths to the value sent to the PWM pin
-  } else TCA0.SPLIT.HCMP0 = 255;                                        // full value. Jeez, this is pretty clever
+void writePWM(uint16_t value10bit) {   // crams a 10-bit value into an 8-bit PWM pin
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {  // nope, this just stores the 10-bit value into the volatile variable
+    pwmTarget10bit = value10bit;       // that's all just that
+  }
+  /*here's all the stuff the dithering code USED to do*/
+  // static byte dither = 0;                                               // dither value
+  // byte high = value10bit >> 2;                                          // main value to send
+  // if (high < 255) {                                                     // checks for room? 255 + 1 = zerooooo what in the
+  //   dither += value10bit & 0x03;                                        // grab those two least significant bits
+  //   TCA0.SPLIT.HCMP0 = (dither >= 4) ? (dither -= 4, high + 1) : high;  // Is dither greater than 3? if so, get rid of 4/4ths of a whole value out of "dither" and add that 4/4ths to the value sent to the PWM pin
+  // } else TCA0.SPLIT.HCMP0 = 255;                                        // full value. Jeez, this is pretty clever
 }
 
 
 void writeDAC(unsigned int value) {  // this is so silly -- the data needs to be written twice, one as a byte, and once with just two bits
-  DAC0.DATAL = value & 0x03;         // write lower 2 bits
+
+
+  DAC0.DATAL = (value & 0x03) << 6;  // write lower 2 bits
   DAC0.DATAH = (value >> 2) & 0xFF;  // write upper 8 bits and latches the output
-  // Serial2.println(value);
+
 }  // don't mess with this function, it'll break EVERYTHING
 
 

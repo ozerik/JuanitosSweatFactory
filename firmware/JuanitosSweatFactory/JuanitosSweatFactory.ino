@@ -1,5 +1,6 @@
 #include <APA102.h>
 #include <arduino.h>
+#include <util/atomic.h>
 
 /*stuff to configure the APA102 addressable LEDs*/
 const byte dataPin = 17;             // the clock pin, PIN_PC1
@@ -10,6 +11,7 @@ rgb_color colors[ledCount];          // here's where the color info is stored
 const byte brightness = 10;          // default brightness is 10, out of 31
 const byte jitterDefeater = 70;      // hysteresis conqueror -- how much the pot has to turn into the new value to count?
 
+volatile unsigned int pwmTarget10bit = 0;  // shared variable that holds the whole value for the dithering PWM thing
 
 byte mode;     // specifically mode of sequence, from "linear" to cylon to patterns
 int metaMode;  // modifies the mode of the sequences
@@ -24,7 +26,7 @@ const int longGlide = 1500;
 
 /* this part handles the values coming in from the pots and jacks, along with
 the low-resolution versions for LED colors*/
-int circlePots[8];            // the array for the high-res value of the 8 pots in a circle
+// int circlePots[8];            // the array for the high-res value of the 8 pots in a circle
 byte cirLEDs[8];              // the low-res version for the LEDs
 unsigned int topRowPots[4];   // top four pots, high resolution value
 byte topLEDs[4];              // low-res, for the LED colors
@@ -105,16 +107,20 @@ unsigned long aTimer;  // times the analogRead functions to 200 times per second
 
 bool shift;
 unsigned long shiftPressedDebounce;  // the shift key gets its own debounce timer!
-byte shiftTracker;                   // shift button modes, one or two?
+byte shiftMode;                      // shift button modes, one or two?
+byte quantize;                       // which quantize mode?
+int TcirclePots[8];                  // temp circle pot value
 bool circlePotValueChanged[8];       // if the shift key is pressed AND something else is done, well, that means don't change tracker position
-byte slewValue[8];                   // HERE'S THE VARIABLE that contains slews for each circle pot
+int slewValue[8];                    // HERE'S THE VARIABLE that contains slews for each circle pot
 int oldPotsValue[8];                 // old pots value, for setting the circlePotValueChanged value
 bool potNeedCatch[8];                // all 1s to keep all the pots from flashing on powerup
 unsigned long CPotTimer[8];          // this is for FLASHYFLASH when the circlepots get back into being latched
-int RTPots[8];                       // real time circle pot readings
-unsigned int currentCV;              // for glide, current CV
+int circlePots[8];                   // real time circle pot readings
+int currentCV;                       // main current CV value, ten bit number, 0 through 1023
+int rangedCV;                        // CV adjusted to current CVRange, to be sent to DAC and recorded to the forkable sequence
+int CVRange = 307;                   // changes how high the final output CV will go
 unsigned long glideTimer;            // for glide, the timer for it :P
-unsigned int targetCV;               // where we heading toward?
+int targetCV;                        // where we heading toward?
 
 
 bool record = true;                    // sets the record flag
@@ -194,7 +200,7 @@ void setup() {
   TCA0.SPLIT.HCMP1 = 0;  // PA4
   TCA0.SPLIT.HCMP2 = 0;  // PA5
 
-  TCA0.SPLIT.CTRLA = TCA_SPLIT_CLKSEL_DIV1_gc
+  TCA0.SPLIT.CTRLA = TCA_SPLIT_CLKSEL_DIV16_gc
                      | TCA_SPLIT_ENABLE_bm;
 
   pinMode(PIN_PA3, OUTPUT);  // filtered PWM analog out 2
@@ -210,17 +216,19 @@ void setup() {
   pinMode(PIN_PA6, OUTPUT);  // shift key LED
 
   ADC0.CTRLB = ADC_SAMPNUM_ACC16_gc;  // hardware-accumulate 16 samples
-  ADC0.SAMPCTRL = 16;  // longer sample window — pots are high-impedance sources, this matters more than people expect
+  ADC0.SAMPCTRL = 16;                 // longer sample window — pots are high-impedance sources, this matters more than people expect
   // ADC0.CTRLA = ADC_ENABLE_bm | ADC_RESSEL_12BIT_gc;
-  analogReadResolution(12);           // the AVR128DB has 12 bit analog read resolution! That's 4096 values!!! May as well use it
+  analogReadResolution(12);  // the AVR128DB has 12 bit analog read resolution! That's 4096 values!!! May as well use it
 
 
   VREF.DAC0REF = 0x05;                        // writing to this register enables VDD voltage reference for the DAC
   DAC0.CTRLA = DAC_ENABLE_bm | DAC_OUTEN_bm;  // and this enables that DAC
   VREF.ADC0REF = VREF_REFSEL_VDD_gc;          // this WEIRD line selects VCC (5V) as the voltage reference for analog reads
   // I guess DXCore has a bug where it writes analogReference(VDD) to the wrong register?
-  setupClock();         // starting the clock in the setup routine
-  Serial2.begin(9600);  //Enabling this requires reset-hold-shift routine to get the module to flash. Boo.
+
+  setupClock();                             // starting the clock in the setup routine
+  TCA0.SPLIT.INTCTRL |= TCA_SPLIT_HUNF_bm;  // this line enables high-side underflow interrupts for the dithering
+  Serial2.begin(9600);                      //Enabling this requires reset-hold-shift routine to get the module to flash. Boo.
   //
 }
 
@@ -279,10 +287,20 @@ ISR(PORTD_PORT_vect) {             // this is the external clock Interrupt SErvi
   clockTicks++;
 }
 
+ISR(TCA0_HUNF_vect) {
+  static byte dither = 0;
+  uint16_t value10bit = pwmTarget10bit;                                 // in the writePWM() function, it uses ATOMIC_BLOCK which sounds pretty damn serious
+  byte high = value10bit >> 2;                                          // the most important 8 bits of the value being written to the PWM pin
+  if (high < 255) {                                                     // prevents dithering if the value is all the way up
+    dither += value10bit & 0x03;                                        // adds the 2 least-significant-bits to value dither
+    TCA0.SPLIT.HCMP0 = (dither >= 4) ? (dither -= 4, high + 1) : high;  // watches for dither to get up to 4, if it is? write high + 1. If not, just write high
+  } else TCA0.SPLIT.HCMP0 = 255;                                        // just write max value, 255, don't try to dither "up"
+  TCA0.SPLIT.INTFLAGS = TCA_SPLIT_HUNF_bm;                              // reset the interrrupt
+}
+
 
 
 void loop() {
-  
-  lewp();
 
+  lewp();
 }

@@ -1,26 +1,33 @@
 void analogReads() {
-  RTPots[0] = (uint16_t)analogRead(PIN_PD4) >> 6;
-  RTPots[1] = (uint16_t)analogRead(PIN_PD5) >> 6;
-  RTPots[2] = (uint16_t)analogRead(PIN_PE0) >> 6;
-  RTPots[3] = (uint16_t)analogRead(PIN_PE1) >> 6;
-  RTPots[4] = (uint16_t)analogRead(PIN_PE4) >> 6;
-  RTPots[5] = (uint16_t)analogRead(PIN_PE3) >> 6;
-  RTPots[6] = (uint16_t)analogRead(PIN_PE2) >> 6;
-  RTPots[7] = (uint16_t)analogRead(PIN_PE5) >> 6;
+  
+  TcirclePots[0] = (uint16_t)analogRead(PIN_PD4) >> 6;
+  TcirclePots[1] = (uint16_t)analogRead(PIN_PD5) >> 6;
+  TcirclePots[2] = (uint16_t)analogRead(PIN_PE0) >> 6;
+  TcirclePots[3] = (uint16_t)analogRead(PIN_PE1) >> 6;
+  TcirclePots[4] = (uint16_t)analogRead(PIN_PE4) >> 6;
+  TcirclePots[5] = (uint16_t)analogRead(PIN_PE3) >> 6;
+  TcirclePots[6] = (uint16_t)analogRead(PIN_PE2) >> 6;
+  TcirclePots[7] = (uint16_t)analogRead(PIN_PE5) >> 6;
+  // okay here's where we check the pots against if they're picked up, and if they are, record new ACTUAL values
+  for (byte i = 0; i < 8; i++) {
+    if (!potNeedCatch[i]) circlePots[i] = TcirclePots[i];
+  }
+
+  if (shiftMode == 1) {
+    CVRange = map(circlePots[6], 0, 1023, 102, 1023);
+    quantize = map(circlePots[2], 0, 1023, 0, 8); // todo figure out color scheme for quanitzation, also QUANTIZATION
+  }
+
   // topRowPots[0] = analogRead(PIN_PD0);               // CV jack top left, clock input mostly
   topRowPots[1] = (uint16_t)analogRead(PIN_PD1) >> 4;  // top row pots without switches under them
   topRowPots[2] = (uint16_t)analogRead(PIN_PD2) >> 4;  // top row pots without switches under them
   // if (record == false) arPD3 = analogRead(PIN_PD3);  // CV jack top right, only does analogReads while being a gesture recorder
   arPE7 = (uint16_t)analogRead(PIN_PE7) >> 4;  // clock pot, high res
   arPD7 = (uint16_t)analogRead(PIN_PD7) >> 4;  // envelope pot, high res
-  // Serial2.println(arPE7);
 
-  // okay here's where we check the pots against if they're picked up, and if they are, record new ACTUAL values
-  for (byte i = 0; i < 8; i++) {
-    if (!potNeedCatch[i]) circlePots[i] = RTPots[i];
-  }
 
- // the following part handles the reading of the middle two pots, and outputs the proper mode and metaMode variables
+
+  // the following part handles the reading of the middle two pots, and outputs the proper mode and metaMode variables
   {
     /* variables:
       mode = what number mode using
@@ -59,7 +66,7 @@ void analogReads() {
       targetVal[1] = 100;
     }
     static byte oldStep;
-    if (topRowPots[1] > 3950) {                     // this part turns the metaMode pot into a step selector, to more easily tune the knobs
+    if (topRowPots[1] > 3900) {                     // this part turns the metaMode pot into a step selector, to more easily tune the knobs
       if (!doStepSelection) oldStep = currentStep;  // save on entry
       doStepSelection = true;
       targetSat[1] = 0;
@@ -117,11 +124,22 @@ void analogReads() {
     }
   }
 
-  for (byte i = 0; i < 8; i++) {                           // this loop gets the circlePot LEDs ready
+  for (byte i = 0; i < 8; i++) {  // this loop gets the circlePot LEDs ready
+
     cirLEDs[i] = map(circlePots[i] >> 2, 0, 255, 0, 185);  // the ">> 2" means "divide by 4"
+    if (shiftMode == 1) {
+      targetVal[4] = 180;  // here's configuration mode
+      targetVal[5] = 0;    // three pots are bright
+      targetVal[6] = 180;  // the rest of the circlePots are off
+      targetVal[7] = 0;    // this is the visual indicator that we're in CONFIG MODE
+      targetVal[8] = 0;
+      targetVal[9] = 0;
+      targetVal[10] = 180;
+      targetVal[11] = 0;
+    }
   }
 
-  if (!(PORTB.IN & (1 << 2)) && !(PORTA.IN & PIN7_bm) && !(PORTB.IN & (1 << 1)/*arPE7 == 0*/)) Serial2.end(); // this is a hotkey to stop Serial2 from bashing the UPDI network WHAT???? I don't get it either
+  if (!(PORTB.IN & (1 << 2)) && !(PORTA.IN & PIN7_bm) && !(PORTB.IN & (1 << 1))) Serial2.end();  // this is a hotkey to stop Serial2 from bashing the UPDI network WHAT???? I don't get it either
 
 
   static bool firstRun = true;                          // all the envelope parameters should be what the pot
