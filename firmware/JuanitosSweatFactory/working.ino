@@ -1,3 +1,12 @@
+int quantize(int rawCounts) {        // this quantizes the value rawCounts to play in whatever scale qMode is at
+  if (qMode == 0) return rawCounts;  // Nope. Just play the value
+  if (slewValue[currentStep] > 0) return rawCounts;
+  int octave = rawCounts / countsPerOctave;                              // how many octaves up are we?
+  int remainder = rawCounts - (octave * countsPerOctave);                // what note in that octave are we at?
+  return (octave * countsPerOctave) + quantSnapTable[qMode][remainder];  // okay, snap to teh quantized snap table
+}
+
+
 void gestureRecord() {
   // okay.... pressing shift zeroes out gate. Holding shift plus envPotButton sets gate high. Holding
   // envPotButton down *without* holding shift while turning pot sets CV. Pressing envpotbutton records
@@ -22,7 +31,7 @@ void gestureRecord() {
 }
 
 void tapTempo() {
-  Serial2.println(":ajdak;");
+
   static unsigned long lastTap = 0;                                             // when did the last tap happen?
   static unsigned long intervals[8];                                            // stores all the times between taps
   static byte tapIndex = 0;                                                     // which value in that array? This one!

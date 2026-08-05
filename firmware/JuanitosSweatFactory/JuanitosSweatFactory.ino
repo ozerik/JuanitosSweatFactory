@@ -108,19 +108,35 @@ unsigned long aTimer;  // times the analogRead functions to 200 times per second
 bool shift;
 unsigned long shiftPressedDebounce;  // the shift key gets its own debounce timer!
 byte shiftMode;                      // shift button modes, one or two?
-byte quantize;                       // which quantize mode?
-int TcirclePots[8];                  // temp circle pot value
-bool circlePotValueChanged[8];       // if the shift key is pressed AND something else is done, well, that means don't change tracker position
-int slewValue[8];                    // HERE'S THE VARIABLE that contains slews for each circle pot
-int oldPotsValue[8];                 // old pots value, for setting the circlePotValueChanged value
-bool potNeedCatch[8];                // all 1s to keep all the pots from flashing on powerup
-unsigned long CPotTimer[8];          // this is for FLASHYFLASH when the circlepots get back into being latched
-int circlePots[8];                   // real time circle pot readings
-int currentCV;                       // main current CV value, ten bit number, 0 through 1023
-int rangedCV;                        // CV adjusted to current CVRange, to be sent to DAC and recorded to the forkable sequence
-int CVRange = 307;                   // changes how high the final output CV will go
-unsigned long glideTimer;            // for glide, the timer for it :P
-int targetCV;                        // where we heading toward?
+
+const byte countsPerOctave = 100;         // on 2nd prototype 100 "values" goes up one volt and octave. On 3rd prototype this will probably change to 128 so math is faster
+byte quantSnapTable[9][countsPerOctave];  // my very first two dimensional array!!!
+byte qMode = 0;                           // which quantize mode?
+int countsPerSemitone;                    // Some scales have fewer notes. Just teh way it is
+const uint16_t scaleTable[9] = {
+  0b111111111111,  // qMode 0, turns off quantization
+  0b111111111111,  // qMode 1, chromatic
+  0b101011010101,  // qMode 2: major
+  0b101101011001,  // qMode 3: minor
+  0b101010010101,  // qMode 4: major pentatonic
+  0b100101001001,  // qMode 5: minor pentatonic
+  0b100101011001,  // qMode 6: harmonic minor
+  0b010101010101,  // qMode 7: whole tone
+  0b100101101001,  // qMode 8: blues
+};
+
+int TcirclePots[8];             // temp circle pot value
+bool circlePotValueChanged[8];  // if the shift key is pressed AND something else is done, well, that means don't change tracker position
+int slewValue[8];               // HERE'S THE VARIABLE that contains slews for each circle pot
+int oldPotsValue[8];            // old pots value, for setting the circlePotValueChanged value
+bool potNeedCatch[8];           // all 1s to keep all the pots from flashing on powerup
+unsigned long CPotTimer[8];     // this is for FLASHYFLASH when the circlepots get back into being latched
+int circlePots[8];              // real time circle pot readings
+int currentCV;                  // main current CV value, ten bit number, 0 through 1023
+int rangedCV;                   // CV adjusted to current CVRange, to be sent to DAC and recorded to the forkable sequence
+int CVRange = 307;              // changes how high the final output CV will go
+unsigned long glideTimer;       // for glide, the timer for it :P
+int targetCV;                   // where we heading toward?
 
 
 bool record = true;                    // sets the record flag
@@ -159,7 +175,9 @@ unsigned long extNowReal;                 // the variable the main lewp() uses t
 
 void setup() {
   /*DELAY to allow power supply caps to charge*/
-  delay(1500);  // caps charging *and* allowing UPDI to initialize if you wanna use Serial2 communications. Right after the code compiles, reset the module to flash
+  delay(500);          // caps charging *and* allowing UPDI to initialize if you wanna use Serial2 communications. Right after the code compiles, reset the module to flash
+  buildQuantTables();  // for quantization! Make all those notes snap to the tables this is gonna build
+
   /*INPUTS*/
   pinMode(PIN_PD4, INPUT);  // circlePot 1 (zero, don't forget it's address number zero in the array)
   pinMode(PIN_PD5, INPUT);  // circlePot 2 (these are the circlePot input pins) They default to INPUT,
@@ -296,6 +314,35 @@ ISR(TCA0_HUNF_vect) {
     TCA0.SPLIT.HCMP0 = (dither >= 4) ? (dither -= 4, high + 1) : high;  // watches for dither to get up to 4, if it is? write high + 1. If not, just write high
   } else TCA0.SPLIT.HCMP0 = 255;                                        // just write max value, 255, don't try to dither "up"
   TCA0.SPLIT.INTFLAGS = TCA_SPLIT_HUNF_bm;                              // reset the interrrupt
+}
+
+
+bool inScale(uint16_t mask, int absPos) {
+  int s = ((absPos % 12) + 12) % 12;   // proper mod, handles negative absPos too
+  return mask & (1 << s);
+}
+
+void buildQuantTables() {
+  for (byte mode = 1; mode < 9; mode++) {
+    uint16_t mask = scaleTable[mode];
+    for (byte remainder = 0; remainder < countsPerOctave; remainder++) {
+      float semitonePos = (float)remainder * 12.0f / countsPerOctave;
+      int nearest = round(semitonePos);        // 0..12
+
+      int best = nearest;
+      for (byte offset = 0; offset <= 6; offset++) {
+        int up = nearest + offset;             // NOT wrapped -- can legitimately exceed 11
+        int down = nearest - offset;
+        if (inScale(mask, up))   { best = up;   break; }
+        if (inScale(mask, down)) { best = down; break; }
+      }
+
+      int octaveDelta = (best >= 12) ? 1 : 0;  // root is in every one of your scales, so best never needs to go negative
+      int semitoneInOctave = best - (octaveDelta * 12);
+      int tableVal = (int)round((float)semitoneInOctave * countsPerOctave / 12.0f) + (octaveDelta * countsPerOctave);
+      quantSnapTable[mode][remainder] = (byte)tableVal;
+    }
+  }
 }
 
 

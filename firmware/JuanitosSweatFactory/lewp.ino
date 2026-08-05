@@ -10,22 +10,23 @@ void lewp() {
     }                                                  // debounce done
                                                        // this next part runs just once per shift button press:
     if (shift) {                                       // ONCE PER PRESS!!! is the key pressed?
-      if (millis() - doubleClickTimer < 400) {         // looks for a quick double click
+      if (millis() - doubleClickTimer < 280) {         // looks for a quick double click
         doubleClick = true;                            // okay I guess double-click happened
+        doubleClickTimer = 0;
         shiftMode++;
         if (shiftMode > 1) shiftMode = 0;
-        shiftStep = currentStep;          // just for doubleClick mode :D
-      }                                   // that's all
-      doubleClickTimer = millis();        // timer for is this a doubleclick?
-      for (byte i = 0; i < 8; i++) {      // a for loop to....
-        potNeedCatch[i] = false;          // hmm, maybe this is the name of the variable I used for this
-        oldPotsValue[i] = circlePots[i];  // record the current pots into this value
-      }                                   // 0 to 1024, by the way
-                                          // and t his next part just just once per shift button RELEASED
-      if (firstClock == false) {          // and if shift is true???
-        extClock = false;                 // says "HEY NO MORE EXTERNAL CLOCKIN PLEASE"
-        firstClock = true;                // and lets the next clock impulse be "first" for calculation purposes
-        TCB0.CTRLA |= TCB_ENABLE_bm;      // start timer again for normal internal clock mode
+        shiftStep = currentStep;           // just for doubleClick mode :D
+      }                                    // that's all
+      doubleClickTimer = millis();         // timer for is this a doubleclick?
+      for (byte i = 0; i < 8; i++) {       // a for loop to....
+        potNeedCatch[i] = false;           // hmm, maybe this is the name of the variable I used for this
+        oldPotsValue[i] = TcirclePots[i];  // record the current pots into this value
+      }                                    // 0 to 1024, by the way
+                                           // and t his next part just just once per shift button RELEASED
+      if (firstClock == false) {           // and if shift is true???
+        extClock = false;                  // says "HEY NO MORE EXTERNAL CLOCKIN PLEASE"
+        firstClock = true;                 // and lets the next clock impulse be "first" for calculation purposes
+        TCB0.CTRLA |= TCB_ENABLE_bm;       // start timer again for normal internal clock mode
       }
     } else {                // this code below here only happens when the shift key is RELEASED!!!! So clever :rolleyes:
       doubleClick = false;  // no longer holding the shift button
@@ -45,12 +46,13 @@ void lewp() {
 
   // I think this works VVVVV this part turns SLEW on per-pot
   // NOPE GOT RID OF DIFFERENT SHIFT MODES shift mode one, adjust slew value between steps
-  if (shift == true) {                                         // Every Loop. if shift key is pressed?
-    for (byte i = 0; i < 8; i++) {                             // run around the circle of pots WHILE SHIFT is being held
-      if (((oldPotsValue[i] >> 6) != (circlePots[i] >> 6))) {  // the >> 6 introduces a 64-value buffer zone for jitter
-        potNeedCatch[i] = true;                                // it's true. We're all looking for whoever is responsible for this
-        if (circlePots[i] > oldPotsValue[i]) {                 // this checks if WHOEVER IT WAS turned the knob up?
-          slewValue[i] = constrain(((circlePots[i] - oldPotsValue[i]) >> 6), 0, 2);
+  if (shift == true) {                                          // Every Loop. if shift key is pressed?
+    for (byte i = 0; i < 8; i++) {                              // run around the circle of pots WHILE SHIFT is being held
+      if (((oldPotsValue[i] >> 6) != (TcirclePots[i] >> 6))) {  // the >> 6 introduces a 64-value buffer zone for jitter
+        potNeedCatch[i] = true;                                 // it's true. We're all looking for whoever is responsible for this
+
+        if (TcirclePots[i] > oldPotsValue[i]) {  // this checks if WHOEVER IT WAS turned the knob up?
+          slewValue[i] = constrain(((TcirclePots[i] - oldPotsValue[i]) >> 6), 0, 2);
         } else if (slewValue[i] > 0) {  // slew needs to be turned down
           slewValue[i] = 0;             // makes slew just be zero
         }
@@ -80,7 +82,7 @@ void lewp() {
     // }
   } else {
     for (byte i = 0; i < 8; i++) {
-      if (potNeedCatch[i]) {                          // this part is to re-catch the circle pots to take effect again
+      if (potNeedCatch[i]) {                           // this part is to re-catch the circle pots to take effect again
         int cDiff = oldPotsValue[i] - TcirclePots[i];  // this part
         if (cDiff > 10) {
           targetHue[i + 4] = 160;
@@ -155,8 +157,10 @@ void lewp() {
 
     writeLEDs();                                     // runs the "write LEDs" subroutine
     rangedCV = map(currentCV, 0, 1023, 0, CVRange);  // rangify that currentCV
-    writeDAC(rangedCV);                              // maps currentCV to range, and then writes it to the DAC value
-  }                                                  // this code works great!
+    // okay does quantize go here?????? Let's try it
+    rangedCV = quantize(rangedCV);
+    writeDAC(rangedCV);  // maps currentCV to range, and then writes it to the DAC value
+  }                      // this code works great!
 
 
 

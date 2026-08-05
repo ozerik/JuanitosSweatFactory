@@ -1,5 +1,5 @@
 void analogReads() {
-  
+
   TcirclePots[0] = (uint16_t)analogRead(PIN_PD4) >> 6;
   TcirclePots[1] = (uint16_t)analogRead(PIN_PD5) >> 6;
   TcirclePots[2] = (uint16_t)analogRead(PIN_PE0) >> 6;
@@ -15,8 +15,15 @@ void analogReads() {
 
   if (shiftMode == 1) {
     CVRange = map(circlePots[6], 0, 1023, 102, 1023);
-    quantize = map(circlePots[2], 0, 1023, 0, 8); // todo figure out color scheme for quanitzation, also QUANTIZATION
+    if (circlePots[2] < 3) {
+      targetSat[6] = 0;
+      qMode = 0;
+    } else {
+      qMode = map(circlePots[2], 0, 1000, 1, 8);  // todo figure out color scheme for quanitzation, also QUANTIZATION
+      targetHue[6] = qMode << 5;                  // makes knob jump colors with quantize mode except oops this is only 8
+    }
   }
+
 
   // topRowPots[0] = analogRead(PIN_PD0);               // CV jack top left, clock input mostly
   topRowPots[1] = (uint16_t)analogRead(PIN_PD1) >> 4;  // top row pots without switches under them
