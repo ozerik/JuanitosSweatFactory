@@ -154,6 +154,9 @@ int rangedCV;                   // CV adjusted to current CVRange, to be sent to
 int CVRange = 307;              // changes how high the final output CV will go
 unsigned long glideTimer;       // for glide, the timer for it :P
 int targetCV;                   // where we heading toward?
+int oldCV; // checks for a large enough CV jump, then triggers a trigger
+#define CVJUMP 10 // okay ten? is that enough to make triggers cool?
+bool isGliding = false;
 
 
 bool record = true;                    // sets the record flag
@@ -275,7 +278,7 @@ void setup() {
 
   setupClock();                             // starting the clock in the setup routine
   TCA0.SPLIT.INTCTRL |= TCA_SPLIT_HUNF_bm;  // this line enables high-side underflow interrupts for the dithering
-  Serial2.begin(9600);                      //Enabling this requires reset-hold-shift routine to get the module to flash. Boo.
+  // Serial2.begin(9600);                      //Enabling this requires reset-hold-shift routine to get the module to flash. Boo.
   //
 }
 

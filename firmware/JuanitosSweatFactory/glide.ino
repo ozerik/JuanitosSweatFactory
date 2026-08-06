@@ -1,4 +1,5 @@
-void glide() {
+void glide() { // okay ALL THESE rangedCV variables used to be currentCV
+  isGliding = false; // just in case we're NOT gliding. Don't wanna trigger triggers. 
   if (currentCV == targetCV) return;        // no gliding needs doing YES
   unsigned long duration;                   // how long shall we glide?
   switch (slewValue[currentStep & 0x07]) {  // current step (hex means bitmask to throw away higher bits to avoid writing to unknown memory)
@@ -15,6 +16,7 @@ void glide() {
       currentCV = targetCV;                                        // all  finished
     } else {                                                       // except maybe we're not?
       currentCV = map(elapsed, 0, duration, currentCV, targetCV);  // do this math, adding or subtracting to get to the next CV value
+      isGliding = true;
     }
   }
 }

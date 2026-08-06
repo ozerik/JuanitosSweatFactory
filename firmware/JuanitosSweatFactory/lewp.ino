@@ -142,39 +142,18 @@ void lewp() {
   if (clockPotPickedUp == false || envPotPickedUp == false) analogReads();
   if (millis() - aTimer > 3) {  // run it 330 times per second
 
-
-
-
-    analogReads();                              // analog reads all 12 analog pin inputs
-    aTimer = millis();                          // reset the timer
-    targetCV = circlePots[currentStep & 0x07];  //Nope, do NOT divide by 4, already done in analogReads() DUH
-    glide();                                    // run the glide part
-    // if (doubleClick == true) {                  // watch for doubleclick
-    //   // currentCV = circlePots[shiftStep];        // keep value on the step it's on!
-    //   for (byte i = 0; i < 8; i++) {
-    //   }
-    // }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    analogReads();                                   // analog reads all 12 analog pin inputs
+    aTimer = millis();                               // reset the timer
+    targetCV = circlePots[currentStep & 0x07];       //Nope, do NOT divide by 4, already done in analogReads() DUH
     writeLEDs();                                     // runs the "write LEDs" subroutine
     rangedCV = map(currentCV, 0, 1023, 0, CVRange);  // rangify that currentCV
     // okay does quantize go here?????? Let's try it
-    rangedCV = quantize(rangedCV);
-    writeDAC(rangedCV);  // maps currentCV to range, and then writes it to the DAC value
-  }                      // this code works great!
+    rangedCV = quantize(rangedCV);                                                   // quantize that mammajamma
+    glide();                                                                         // run the glide part
+    if ((abs(rangedCV - oldCV) > CVJUMP) && isGliding == false) playEnvTracker = 1;  // seriously? is that gonna do it????
+    writeDAC(rangedCV);                                                              // maps currentCV to range, and then writes it to the DAC value
+    oldCV = rangedCV;
+  }  // this code works great!
 
 
 
@@ -585,6 +564,7 @@ void lewp() {
         if (extClockFirst == true) {          // first time through this?
           extNow = micros();                  // drop a temporal reference point
           extClockFirst = false;              // and don't do another one until after measuring the interval
+          // todo
           modeHandling();                     // do the thing every time, including this one
         } else {                              //
           extPeriod = micros() - extNow;      // interval calculation
@@ -606,9 +586,10 @@ void lewp() {
         if (ppqnCounter > 3) targetVal[12] = constrain((255 - (ppqnCounter << 3)), 0, 255);  // shift key LED off
       }
     }
-    CFC++;                                                             // CFC equals clock flash counter haha -- this is just for the clock LED to go brighter and dimmer
-    if (CFC > 23) CFC = 0;                                             // reset CFC
-    if (record == true) {                                              // well, record must equal equal true
+    CFC++;                  // CFC equals clock flash counter haha -- this is just for the clock LED to go brighter and dimmer
+    if (CFC > 23) CFC = 0;  // reset CFC
+    if (record == true) {   // well, record must equal equal true
+
       writePWM(rangedCV);                                              // locks this value in
       recorded[recordSteps] = (uint16_t)(gateForRecord << 15)          // gate, on or off, also empties all the binary values
                               | (rangedCV & 0x03FF);                   // the CV, 10 bits, 1024 values
