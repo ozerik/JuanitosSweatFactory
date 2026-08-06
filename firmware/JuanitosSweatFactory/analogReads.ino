@@ -13,14 +13,31 @@ void analogReads() {
     if (!potNeedCatch[i]) circlePots[i] = TcirclePots[i];
   }
 
+
+  //  CVRCheck = circlePots[6];
+  //  QMCheck = circlePots[2];
+  //  BRCheck = circlePots[4];
+
+
+
   if (shiftMode == 1) {
-    CVRange = map(circlePots[6], 0, 1023, 102, 1023);
-    if (circlePots[2] < 3) {
-      targetSat[6] = 0;
-      qMode = 0;
-    } else {
-      qMode = map(circlePots[2], 0, 1000, 1, 8);  // todo figure out color scheme for quanitzation, also QUANTIZATION
-      targetHue[6] = qMode << 5;                  // makes knob jump colors with quantize mode except oops this is only 8
+    if ((abs(circlePots[6] - CVRCheck) > JITTER_DEFEATER) || CVRAdjust == true) {  // only change CVRange if the change is intentional
+      CVRange = map(circlePots[6], 0, 1023, 102, 1023);                            // actually change the CVRange
+      CVRAdjust = true;                                                            // keep changing CVRange next time through
+    }
+    if ((abs(circlePots[2] - QMCheck) > JITTER_DEFEATER) || QMAdjust == true) {
+      QMAdjust = true;
+      if (circlePots[2] < 3) {
+        targetSat[6] = 0;
+        qMode = 0;
+      } else {
+        qMode = map(circlePots[2], 0, 1000, 1, 8);  // todo figure out color scheme for quanitzation, also QUANTIZATION
+        targetHue[6] = qMode << 5;                  // makes knob jump colors with quantize mode except oops this is only 8
+      }
+    }
+    if ((abs(circlePots[4] - BRCheck) > JITTER_DEFEATER) || BRAdjust == true) {
+      BRAdjust = true;
+      brightness = map(circlePots[4], 0, 1000, 1, 31);
     }
   }
 
@@ -46,7 +63,7 @@ void analogReads() {
     static byte oldMode;
     static byte newMode;
     newMode = constrain(map(topRowPots[1], 0, 3895, 0, 5), 0, 4);  // 0, linear; 1, cylon; 2, pattern bank A; 3, pattern bank B; 4, user-saved patterns????
-    if (newMode != oldMode && abs(topRowPots[1] - oldModePotValue) > jitterDefeater) {
+    if (newMode != oldMode && abs(topRowPots[1] - oldModePotValue) > JITTER_DEFEATER) {
       mode = oldMode = newMode;       // get that jitter out of here!
       currentStep = currentStep % 8;  // gets rid of the possibly gigantic number that may have accumulated without changing the actual step that's current
       oldModePotValue = topRowPots[1];
@@ -125,8 +142,8 @@ void analogReads() {
     }
     if (doStepSelection) {                                                 // this part lets you choose which step pot is current, and you can tune them this way
       currentStep = constrain(map(topRowPots[2], 0, 3895, 5, 13), 5, 12);  // 5 to 12 what the???
-      if (currentStep > 7) currentStep = currentStep - 8;                  // see, the pointer of the metaMode pot points sorta in the direction of the current pot
-      targetHue[2] = targetHue[currentStep + 4];                           // yeah, gotta do math because currentPot needs to roll over
+      // if (currentStep > 7) currentStep = currentStep - 8;                  // see, the pointer of the metaMode pot points sorta in the direction of the current pot
+      targetHue[2] = targetHue[(currentStep &= 0x07) + 4];  // yeah, gotta do math because currentPot needs to roll over
       // writeDAC(circlePots[currentStep & 0x07]);            // draw the LED color without latency (200Hz I guess)
     }
   }
@@ -134,15 +151,24 @@ void analogReads() {
   for (byte i = 0; i < 8; i++) {  // this loop gets the circlePot LEDs ready
 
     cirLEDs[i] = map(circlePots[i] >> 2, 0, 255, 0, 185);  // the ">> 2" means "divide by 4"
+
     if (shiftMode == 1) {
-      targetVal[4] = 180;  // here's configuration mode
-      targetVal[5] = 0;    // three pots are bright
-      targetVal[6] = 180;  // the rest of the circlePots are off
-      targetVal[7] = 0;    // this is the visual indicator that we're in CONFIG MODE
-      targetVal[8] = 0;
+      targetVal[4] = 0;   // here's configuration mode
+      targetVal[5] = 0;   // the three 200 pots are bright
+      targetVal[6] = 80;  // the rest of the circlePots are off
+      targetVal[7] = 0;   // this is the visual indicator that we're in CONFIG MODE
+      targetVal[8] = 80;
       targetVal[9] = 0;
-      targetVal[10] = 180;
+      targetVal[10] = 80;
       targetVal[11] = 0;
+      if (CVRAdjust == true) targetVal[10] = 200;  // keep those adjust pots DIM unless the adjustment happens
+      if (QMAdjust == true) targetVal[6] = 200;
+      if (BRAdjust == true) targetVal[8] = 200;
+      if (doFlash) {  //
+        // if (currentStep > 7) byte wtFFF = currentStep - 8;
+        targetHue[cylonFix + 4] = cirLEDs[currentStep];
+        targetVal[cylonFix + 4] = 255;
+      }
     }
   }
 

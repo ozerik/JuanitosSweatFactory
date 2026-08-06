@@ -1,13 +1,15 @@
 void modeHandling() {  // runs when it's time to do the next step!
 
-  if (shiftMode == 0) {
-    targetHue[12] = 0;    // red
-    targetSat[12] = 255;  // bright red
-    targetVal[12] = 255;
-  } else if (shiftMode == 1) {
-    targetHue[12] = 160;  // blue
-    targetVal[12] = 255;
-  }
+  // if (shiftMode == 0) {
+  //   targetHue[12] = 0;    // red
+  //   targetSat[12] = 255;  // bright red
+  //   targetVal[12] = 255;
+  // } else if (shiftMode == 1) {
+  //   targetHue[12] = 160;  // blue
+  //   targetVal[12] = 255;
+  //   targetVal[currentStep + 4] = 255;
+  //   targetSat[currentStep + 4] = 0;
+  // }
 
   static byte oldMode;
   if (mode == 0) {            // okay here's linear mode!!!!
@@ -1049,8 +1051,6 @@ void modeHandling() {  // runs when it's time to do the next step!
         if (patternCount > 63) patternCount = 0;
         break;
       case 4:
-
-
         patternCount++;
         if (patternCount > 31) patternCount = 0;
         break;

@@ -1,19 +1,34 @@
 #include <APA102.h>
 #include <arduino.h>
 #include <util/atomic.h>
+#include <EEPROM.h>
+
+/*EEPROM byte addresses const section*/
+const byte RANGE_LSB = 0;
+const byte RANGE_MSB = 1;
+const byte QUANTMODE = 2;
+const byte BRIGHTNESS = 3;
+
+bool CVRAdjust = false;  // turns on adjustment for config pots
+bool QMAdjust = false;   // for quantize
+bool BRAdjust = false;   // for bright
+int CVRCheck;            // stores original pot values to avoid INSTANT SUDDEN ADJUST!!! for range
+int QMCheck;             // q
+int BRCheck;             // br
 
 /*stuff to configure the APA102 addressable LEDs*/
-const byte dataPin = 17;             // the clock pin, PIN_PC1
-const byte clockPin = 16;            // the data pin, PIN_PC0
-APA102<dataPin, clockPin> ledStrip;  // the "object" of the LED array
-const byte ledCount = 13;            // how many LEDs are in this project?
-rgb_color colors[ledCount];          // here's where the color info is stored
-const byte brightness = 10;          // default brightness is 10, out of 31
-const byte jitterDefeater = 70;      // hysteresis conqueror -- how much the pot has to turn into the new value to count?
+#define DATAPIN 17                    // the clock pin, PIN_PC1
+#define CLOCKPIN 16                   // the data pin, PIN_PC0
+APA102<DATAPIN, CLOCKPIN > ledStrip;  // the "object" of the LED array
+#define LEDCOUNT 13                   // how many LEDs are in this project?
+rgb_color colors[LEDCOUNT];           // here's where the color info is stored
+byte brightness = 10;                 // default brightness is 10, out of 31
+#define JITTER_DEFEATER 70            // hysteresis conqueror -- how much the pot has to turn into the new value to count?
 
 volatile unsigned int pwmTarget10bit = 0;  // shared variable that holds the whole value for the dithering PWM thing
 
 byte mode;     // specifically mode of sequence, from "linear" to cylon to patterns
+byte cylonFix; // sigh. Just so cylon mode will flash the right way
 int metaMode;  // modifies the mode of the sequences
 
 const int shortGlide = 300;
@@ -92,6 +107,8 @@ byte numSteps = 8;               // basic circle sequence, a nice default, but c
 unsigned long stepFlash;         // timer for white flash on step change
 unsigned long pot1Flash;         // for flashing the clock pot
 bool doStepSelection = false;    // this says HEY METAMODE KNOB EQUALS STEP SELECTOR NOW
+#define TRIGGER_TIME 8           // how long trigger stays high???? 8ms is default
+bool doFlash; // for the flashing stuff
 
 /*Modes and Sequence Stuff*/
 
@@ -175,7 +192,7 @@ unsigned long extNowReal;                 // the variable the main lewp() uses t
 
 void setup() {
   /*DELAY to allow power supply caps to charge*/
-  delay(500);          // caps charging *and* allowing UPDI to initialize if you wanna use Serial2 communications. Right after the code compiles, reset the module to flash
+  delay(500);          // caps charging
   buildQuantTables();  // for quantization! Make all those notes snap to the tables this is gonna build
 
   /*INPUTS*/
@@ -200,6 +217,18 @@ void setup() {
   pinMode(PIN_PA7, INPUT_PULLUP);                                                  // mechanical keyboard switch for SHIFT
   while (digitalRead(PIN_PA7) == LOW) digitalWrite(PIN_PF2, (millis() >> 8) & 1);  // this is to prevent more BRICKINGS. Hold shift to pause everything so UPDI can initialize
                                                                                    // OOOORRRRRRRR ^^^^^^^^^^ reset the module while holding shift, that'll pause the module so UPDI can initialize
+  // read the relevant values that get configured in config mode (shiftMode == 1)
+  byte lo = EEPROM.read(RANGE_LSB);
+  byte hi = EEPROM.read(RANGE_MSB);
+  int stored = (hi << 8) | lo;
+  if (stored < 102 || stored > 1023) {
+    CVRange = 307;
+  } else {
+    CVRange = stored;
+  }
+  qMode = EEPROM.read(QUANTMODE);
+  brightness = EEPROM.read(BRIGHTNESS);
+  if (brightness < 1 || brightness > 31) brightness = 10;
 
   /*OUTPUTS*/
   // HARDWARE INTERRUPT!!! This is for the clock input!
@@ -318,7 +347,7 @@ ISR(TCA0_HUNF_vect) {
 
 
 bool inScale(uint16_t mask, int absPos) {
-  int s = ((absPos % 12) + 12) % 12;   // proper mod, handles negative absPos too
+  int s = ((absPos % 12) + 12) % 12;  // proper mod, handles negative absPos too
   return mask & (1 << s);
 }
 
@@ -327,14 +356,20 @@ void buildQuantTables() {
     uint16_t mask = scaleTable[mode];
     for (byte remainder = 0; remainder < countsPerOctave; remainder++) {
       float semitonePos = (float)remainder * 12.0f / countsPerOctave;
-      int nearest = round(semitonePos);        // 0..12
+      int nearest = round(semitonePos);  // 0..12
 
       int best = nearest;
       for (byte offset = 0; offset <= 6; offset++) {
-        int up = nearest + offset;             // NOT wrapped -- can legitimately exceed 11
+        int up = nearest + offset;  // NOT wrapped -- can legitimately exceed 11
         int down = nearest - offset;
-        if (inScale(mask, up))   { best = up;   break; }
-        if (inScale(mask, down)) { best = down; break; }
+        if (inScale(mask, up)) {
+          best = up;
+          break;
+        }
+        if (inScale(mask, down)) {
+          best = down;
+          break;
+        }
       }
 
       int octaveDelta = (best >= 12) ? 1 : 0;  // root is in every one of your scales, so best never needs to go negative

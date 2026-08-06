@@ -12,9 +12,23 @@ void lewp() {
     if (shift) {                                       // ONCE PER PRESS!!! is the key pressed?
       if (millis() - doubleClickTimer < 280) {         // looks for a quick double click
         doubleClick = true;                            // okay I guess double-click happened
-        doubleClickTimer = 0;
-        shiftMode++;
-        if (shiftMode > 1) shiftMode = 0;
+        doubleClickTimer = 0;                          // probably prevents triple-clicks from turnning double-click mode off
+        shiftMode++;                                   // adds 1 to shiftmode. So far, shiftMode is just 0 or 1, I guess it can go farther that's why this isn't a bool
+        if (shiftMode > 1) {                           // This means "TIME TO GO BACK TO NORMAL MODE"
+          EEPROM.update(RANGE_LSB, CVRange + 0xFF);
+          EEPROM.update(RANGE_MSB, (CVRange >> 8) & 0xFF);
+          EEPROM.update(QUANTMODE, qMode);
+          EEPROM.update(BRIGHTNESS, brightness);
+          shiftMode = 0;
+        } else {  // this means "GOIN IN TO SHIFTMODE 1" or 2, if there's more modes added later :/
+          CVRCheck = circlePots[6];
+          QMCheck = circlePots[2];
+          BRCheck = circlePots[4];
+          CVRAdjust = false;
+          QMAdjust = false;
+          BRAdjust = false;
+        }
+
         shiftStep = currentStep;           // just for doubleClick mode :D
       }                                    // that's all
       doubleClickTimer = millis();         // timer for is this a doubleclick?
@@ -135,11 +149,11 @@ void lewp() {
     aTimer = millis();                          // reset the timer
     targetCV = circlePots[currentStep & 0x07];  //Nope, do NOT divide by 4, already done in analogReads() DUH
     glide();                                    // run the glide part
-    if (doubleClick == true) {                  // watch for doubleclick
-      // currentCV = circlePots[shiftStep];        // keep value on the step it's on!
-      for (byte i = 0; i < 8; i++) {
-      }
-    }
+    // if (doubleClick == true) {                  // watch for doubleclick
+    //   // currentCV = circlePots[shiftStep];        // keep value on the step it's on!
+    //   for (byte i = 0; i < 8; i++) {
+    //   }
+    // }
 
 
 
@@ -352,7 +366,6 @@ void lewp() {
     unsigned long elapsed = millis() - envelopeTimer;         // how long?
     unsigned long duration = map(decay, 0, 255, 10, 2000);    // two second decay?
     envelopeValue = map(elapsed, 0, duration, 255, sustain);  // map to possible voltage outputs
-    // analogWrite(PIN_PA5, envelopeValue);                                             // and do the writing
     if (elapsed > duration) {
       playEnvTracker = 4;  // move on to sustain
       envelopeTimer = millis();
@@ -413,7 +426,9 @@ void lewp() {
     }
   }
 
-  for (byte i = 0; i < ledCount; i++) {                            // calculate all the LED parameter values
+  for (byte i = 0; i < LEDCOUNT; i++) {  // calculate all the LED parameter values
+    if (currentStep > 7) cylonFix = currentStep - 8;
+    else cylonFix = currentStep;
     if (i == 0) {                                                  // top LEFT LED handler!!! CLOCK LED
       if (clockPotPickedUp == true) {                              // HEY! Is the pot positioned where it needs to be? Yes??? DO NORMAL STUFF
         if (millis() - pot1Flash < 200) {                          // these lines
@@ -503,25 +518,39 @@ void lewp() {
         if (CFC > 12) targetVal[0] = targetVal[0] >> 2;
       }
 
-    } else if (i == 3) /*envelope pot*/ {        // top RIGHT led, Envelope Mode
-                                                 // do nothing because it's handled elsewhere
-    } else if (i < 4) {                          // the middle two pots on the top row
-                                                 // value
-    } else if (i == 12) /* shift LED */ {        // do nothing because it's handled elsewhereeee???
+    } else if (i == 3) /*envelope pot*/ {  // top RIGHT led, Envelope Mode
+                                           // do nothing because it's handled elsewhere
+    } else if (i < 4) {                    // the middle two pots on the top row
+                                           // value
+    } else if (i == 12) /* shift LED */ {  // do nothing because it's handled elsewhereeee???
+      if (shiftMode == 0) {
+        targetHue[12] = cirLEDs[currentStep];  // whatever color
+        targetSat[12] = 255;                   // bright whatever color
+        targetVal[12] = 255;
+
+      } else if (shiftMode == 1) {
+        targetHue[12] = 160;  // blue
+        targetVal[12] = 255;
+        // if (currentStep > 7) cylonFix = currentStep - 8;
+        targetVal[cylonFix + 4] = 255;
+        targetSat[cylonFix + 4] = 0;  // this fails to work in cylon mode todo
+      }
     } else if ((currentStep & 0x07) == i - 4) {  // whoah, this is the active step!!!
       if (millis() - stepFlash < 50) {           // does the LED need to flash?
-        targetHue[i] = 255;                      // hue
-        targetSat[i] = 255;                      // saturation
-        targetVal[i] = 255;                      // value
-      } else {                                   // no, the LED doesn't need to flash, it just needs to be bright
-        targetHue[i] = cirLEDs[i - 4];           // hue
-        targetSat[i] = 255;                      // saturation
-        targetVal[i] = 150;                      // value
-      }                                          // end the active step LED
-    } else {                                     // no, the LED doesn't need to flash, it just needs to be bright
-      targetHue[i] = cirLEDs[i - 4];             // hue                                                        // okay these are the non-active step LEDs
-      targetSat[i] = 255;                        // saturation
-      targetVal[i] = 15;                         // value so dim!!!
+        doFlash = true;
+        targetHue[i] = 255;  // hue
+        targetSat[i] = 255;  // saturation
+        targetVal[i] = 255;  // value
+      } else {               // no, the LED doesn't need to flash, it just needs to be bright
+        doFlash = false;
+        targetHue[i] = cirLEDs[i - 4];  // hue
+        targetSat[i] = 255;             // saturation
+        targetVal[i] = 150;             // value
+      }                                 // end the active step LED
+    } else {                            // no, the LED doesn't need to flash, it just needs to be bright
+      targetHue[i] = cirLEDs[i - 4];    // hue                                                        // okay these are the non-active step LEDs
+      targetSat[i] = 255;               // saturation
+      targetVal[i] = 15;                // value so dim!!!
     }
   }
 
@@ -574,7 +603,7 @@ void lewp() {
         /*this part runs once per thing... the circle pots advance every time this runs*/
         modeHandling();
       } else {
-        if (ppqnCounter > 3) targetVal[12] = 0;  // shift key LED off
+        if (ppqnCounter > 3) targetVal[12] = constrain((255 - (ppqnCounter << 3)), 0, 255);  // shift key LED off
       }
     }
     CFC++;                                                             // CFC equals clock flash counter haha -- this is just for the clock LED to go brighter and dimmer
@@ -631,7 +660,7 @@ void lewp() {
 
   loopStart = false;
 
-  if (millis() - stepFlash > 8) {  // time how long the HIGH signals for trigger outs last
-    PORTF.OUTCLR = (0b00001100);   // hey, turn off those HIGH signals for the clock out and end/start of loop signals
+  if (millis() - stepFlash > TRIGGER_TIME) {  // time how long the HIGH signals for trigger outs last
+    PORTF.OUTCLR = (0b00001100);              // hey, turn off those HIGH signals for the clock out and end/start of loop signals
   }
 }

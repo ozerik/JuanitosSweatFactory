@@ -89,10 +89,10 @@ void writeDAC(unsigned int value) {  // this is so silly -- the data needs to be
 
 
 void writeLEDs() {                                           // sets all the LED colors
-  for (byte i = 0; i < ledCount; i++) {                      // in this for loop
+  for (byte i = 0; i < LEDCOUNT; i++) {                      // in this for loop
     setLEDHSV(i, targetHue[i], targetSat[i], targetVal[i]);  // plug the values in!
   }                                                          // and thennnnnn
-  ledStrip.write(colors, ledCount, 20);                      // actually send the data to all the APA102 LEDs
+  ledStrip.write(colors, LEDCOUNT, brightness);                      // actually send the data to all the APA102 LEDs
 }
 
 void setLEDHSV(byte index, byte h, byte s, byte v) {
