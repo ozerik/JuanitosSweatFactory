@@ -161,8 +161,8 @@ bool isGliding = false;
 
 bool record = true;                    // sets the record flag
 unsigned int recordSteps;              // tracks where the recording is
-unsigned int recorded[1536];           // should be long enough? 64 steps of values. Records one value per peak, holds the CV and the gate
-byte recordedB[1536];                  // 64 step variable dedicated to the envelope
+unsigned int recorded[3072];           // should be long enough? 128 steps of values. Records one value per peak, holds the CV and the gate
+byte recordedB[3072];                  // 128 step variable dedicated to the envelope
 bool gateForRecord;                    // gate value to record into array
 unsigned int recordBOC = 500;          // recorded Beginning of Cycle for record BOC
 int arPD7TEMP;                         // holds the value of arPD7, the envelope pot
